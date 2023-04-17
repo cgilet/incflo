@@ -9,6 +9,22 @@
 
 using namespace amrex;
 
+int getCell(int i, int j, int k)
+{
+    int cell = 0;
+
+    for (int n=-1; n<=k; n++) {
+	for (int m=-1; m<=j; m++) {
+	    for (int l=-1; l<=i; l++) {
+		if ( !(l==0 && m==0 && n==0) ) {
+		    cell++;
+		}
+	    }
+	}
+    }
+
+    return cell;
+}
 
 void
 enforceReciprocity(int i, int j, int k, Array4<int> const& itracker)
@@ -18,7 +34,7 @@ enforceReciprocity(int i, int j, int k, Array4<int> const& itracker)
     auto nmap = Redistribution::getInvCellMap();
 
     // Loop over my neighbors to make sure it's reciprocal, i.e. that my neighbor
-    // include me in thier neighborhood too.
+    // includes me in thier neighborhood too.
     for (int i_nbor = 1; i_nbor <= itracker(i,j,k,0); i_nbor++)
     {
         int ioff = map[0][itracker(i,j,k,i_nbor)];
@@ -52,6 +68,55 @@ enforceReciprocity(int i, int j, int k, Array4<int> const& itracker)
                 itracker(ii,jj,kk,0) += 1;
                 itracker(ii,jj,kk,itracker(ii,jj,kk,0)) = me;
             }
+        }
+    }
+}
+
+
+// This doesn't totally work because there's nothing to ensure that
+// some other NU cell doesn't come and take one of my cells for it's
+// nbhd
+// FIXME - Need to make something to enforce only 1 NU cell per nbhd
+void
+enforceExclusive(int i, int j, int k, Array4<int> const& itracker)
+{
+    auto map = Redistribution::getCellMap();
+    // Inverse map
+    auto nmap = Redistribution::getInvCellMap();
+
+    // Loop over my neighbors to make an exclusive nbhd
+    for (int i_nbor = 1; i_nbor <= itracker(i,j,k,0); i_nbor++)
+    {
+        int ioff = map[0][itracker(i,j,k,i_nbor)];
+        int joff = map[1][itracker(i,j,k,i_nbor)];
+        int koff = (AMREX_SPACEDIM < 3) ? 0 : map[2][itracker(i,j,k,i_nbor)];
+
+        int ii = i+ioff;
+        int jj = j+joff;
+        int kk = k+koff;
+
+        if ( Box(itracker).contains(Dim3{ii,jj,kk}) )
+        {
+            int nbor = itracker(i,j,k,i_nbor);
+            int me = nmap[nbor];
+
+            // amrex::Print() << "Cell  " << Dim3{i,j,k} << " is (un)covered and merged with neighbor at " << Dim3{i+ioff,j+joff,k+koff} << std::endl;
+
+            // make all my neighbors' neighborhoods be the same as mine
+	    itracker(ii,jj,kk,0) = itracker(i,j,k,0);
+            for (int i_nbor2 = 1; i_nbor2 < itracker(i,j,k,0); i_nbor2++)
+            {
+                if ( itracker(i,j,k,i_nbor2) != nbor ) {
+		    int inb2 = map[0][itracker(i,j,k,i_nbor2)];
+		    int jnb2 = map[1][itracker(i,j,k,i_nbor2)];
+		    int knb2 = (AMREX_SPACEDIM < 3) ? 0 : map[2][itracker(i,j,k,i_nbor2)];
+
+                    // Print()<<IntVect(i,j)<<"  ADDING A NEIGHBOR!"<<std::endl;
+		    itracker(ii,jj,kk,i_nbor2) = getCell(inb2-ioff,jnb2-joff,knb2-koff);
+                }
+            }
+	    // add me too
+	    itracker(ii,jj,kk,itracker(ii,jj,kk,0)) = me;
         }
     }
 }
@@ -112,10 +177,14 @@ Redistribution::MakeITracker ( Box const& bx,
         {
             // For now, require that newly uncovered cells only have one other cell in it's nbhd
             // FIXME, unsure of target_volfrac here...
-            newlyUncoveredNbhd(i, j, k,
-                               AMREX_D_DECL(apx_new, apy_new, apz_new),
-                               vfrac_new, vel_eb, itracker,
-                               lev_geom, 0.5);
+            // newlyUncoveredNbhd(i, j, k,
+            //                    AMREX_D_DECL(apx_new, apy_new, apz_new),
+            //                    vfrac_new, vel_eb, itracker,
+            //                    lev_geom, 0.5);
+            normalMerging(i, j, k,
+                          AMREX_D_DECL(apx_new, apy_new, apz_new),
+                          vfrac_new, itracker,
+                          lev_geom, target_volfrac);
         }
         else if ( vfrac_old(i,j,k) > 0.0 && vfrac_new(i,j,k) == 0.0)
         {
@@ -131,7 +200,7 @@ Redistribution::MakeITracker ( Box const& bx,
     });
 
 
-#if 1
+#if 0
     amrex::Print() << "\nInitial Cell Merging" << std::endl;
 
     amrex::ParallelFor(Box(itracker),
@@ -168,10 +237,13 @@ Redistribution::MakeITracker ( Box const& bx,
     amrex::ParallelFor(Box(itracker),
     [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept
     {
-        if ( (vfrac_new(i,j,k) > 0. && vfrac_new(i,j,k) < 1. && vfrac_old(i,j,k) == 0.0 ) // Newly uncovered
-             || (vfrac_new(i,j,k) == 0. && vfrac_old(i,j,k) > 0.0) ) // Newly covered Cells
+        if ( vfrac_new(i,j,k) == 0. && vfrac_old(i,j,k) > 0.0 ) // Newly covered Cells
         {
             enforceReciprocity(i, j, k, itracker);
+        }
+        if ( vfrac_new(i,j,k) > 0. && vfrac_new(i,j,k) < 1. && vfrac_old(i,j,k) == 0.0 ) // Newly uncovered
+        {
+            enforceExclusive(i, j, k, itracker);
         }
     });
 
@@ -217,7 +289,7 @@ Redistribution::MakeITracker ( Box const& bx,
     amrex::Print() << std::endl;
 #endif
 
-#if 1
+#if 0
     amrex::Print() << "Post Update to Cell Merging" << std::endl;
 
     amrex::ParallelFor(Box(itracker),

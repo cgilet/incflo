@@ -346,7 +346,11 @@ void Redistribution::Apply ( Box const& bx, int ncomp,
                             //                << " newly uncovered, correct neighbor at "
                             //                << Dim3{i+ioff,j+joff,k+koff} << std::endl;
 
-                            Real delta_vol = vfrac_new(i,j,k) / vfrac_old(i+ioff,j+joff,k+koff);
+                            Real delta_vol = vfrac_new(i,j,k) / itr(i,j,k,0); //vfrac_old(i+ioff,j+joff,k+koff);
+			    // For multiple nbs add -- still not quite right...
+			    // not sure about nrs(i,j,k), maybe itr(i,j,k,0), since NU doesn't contribute a state to Q-hat
+			    // Differnce with multiple nbs is that can't pretend U-hat,n+1 is the same for NU and NB
+			    //delta_vol /= itr(i,j,k,0);
                             // NOTE this correction is only right for the case that the newly
                             // uncovered cell has only one other cell in it's neghborhood.
                             scratch(i+ioff,j+joff,k+koff,n) += U_in(i+ioff,j+joff,k+koff,n) * delta_vol;
