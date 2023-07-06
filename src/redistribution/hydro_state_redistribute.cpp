@@ -7,7 +7,7 @@
 
 #include <hydro_redistribution.H>
 #include <AMReX_EB_Redistribution.H>
-#include <hydro_slope_limiter_K.H>
+#include <AMReX_EB_StateRedistSlopeLimiter_K.H>
 #if (AMREX_SPACEDIM == 2)
 #include <AMReX_EB_Slopes_2D_K.H>
 #elif (AMREX_SPACEDIM == 3)
