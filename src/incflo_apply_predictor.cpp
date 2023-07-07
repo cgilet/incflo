@@ -95,6 +95,23 @@ void incflo::ApplyPredictor (bool incremental_projection)
     }
 
 #ifdef INCFLO_USE_MOVING_EB
+    for (int lev = 0; lev <= finest_level; lev++)
+    {
+        Real target_volfrac = Redistribution::defaults::target_vol_fraction;
+        // FOR varible density, we have to take the NU cell's merging neighbor
+        // Needs one filled ghost cell. Fills only valid region
+        Redistribution::FillNewlyUncovered(m_leveldata[lev]->density_o,
+                                           OldEBFactory(lev), EBFactory(lev),
+                                           *get_velocity_eb(m_cur_time)[lev],
+                                           geom[lev], target_volfrac);
+        fillpatch_density(lev, m_t_old[lev], m_leveldata[lev]->density_o, nghost_state());
+
+        Redistribution::FillNewlyUncovered(m_leveldata[lev]->gp,
+                                           OldEBFactory(lev), EBFactory(lev),
+                                           *get_velocity_eb(m_cur_time)[lev],
+                                           geom[lev], target_volfrac);
+    }
+
     // FIXME - would these be good from the corrector step? can we rely on doing a corrector?
     //   what about initial iterations
     // *************************************************************************************
