@@ -86,8 +86,6 @@ void incflo::ApplyCorrector()
     m_diffusion_scalar_op.reset(new DiffusionScalarOp(this, new_time));
 
     //all these get set in makeNewGeom at end of predictor
-// #ifdef AMREX_USE_EB
-//    if (m_eb_flow.enabled) {
         for (int lev = 0; lev <= finest_level; ++lev) {
             // FIXME - for the corrector to work, we need the EB density to match with val during pred
             // and it seems that value needs to be time N cell average, or perhaps linearly extrapolated
@@ -97,9 +95,6 @@ void incflo::ApplyCorrector()
             set_eb_density(lev, m_cur_time, *get_density_eb()[lev], 1);
             //set_eb_tracer(lev, new_time, *get_tracer_eb()[lev], 1);
         }
-//     }
-// #endif
-
 #endif
 
     // *************************************************************************************
@@ -589,6 +584,7 @@ void incflo::ApplyCorrector()
         // Need to ensure that boundaries are consistent
         vel_temp.FillBoundary(geom[lev].periodicity());
         ld.velocity_o.FillBoundary(geom[lev].periodicity());
+        ld.velocity.FillBoundary(geom[lev].periodicity());
 
         // EB_set_covered(vel_temp,0.);
         // VisMF::Write(vel_temp,"rvt");
