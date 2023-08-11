@@ -7,9 +7,10 @@ max_step                = 10            # Max umber of time steps
 steady_state            =  0            # Steady-state solver? 
 
 #¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨#
-          TIME STEP COMPUTATION         #
+#         TIME STEP COMPUTATION         #
 #.......................................#
-incflo.fixed_dt             =   1.e-2       # Use this constant dt if > 0
+#incflo.fixed_dt             =   1.e-2       # Use this constant dt if > 0
+incflo.cfl = 0.45
 
 incflo.do_initial_proj      =   1
 incflo.initial_iterations   =   1
@@ -38,7 +39,7 @@ incflo.redistribution_type   =  "StateRedist"
 #¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨#
 #        ADAPTIVE MESH REFINEMENT       #
 #.......................................#
-amr.n_cell              =   34 16 16      # Grid cells at coarsest AMRlevel
+amr.n_cell              =   136 64 64      # Grid cells at coarsest AMRlevel
 amr.max_level           =   0           # Max AMR level in hierarchy 
 amr.max_grid_size_x     =   1024
 amr.max_grid_size_y     =   1024
@@ -55,6 +56,8 @@ geometry.is_periodic    =   0   1   1   # Periodicity x y z (0/1)
 # Boundary conditions
 xlo.type                =   "mi"
 xlo.velocity            =   1.0  0.0  0.0
+#xlo.density = 2.45
+#xlo.tracer = 1
 
 xhi.type                =   "po"
 xhi.pressure            =   0.0
