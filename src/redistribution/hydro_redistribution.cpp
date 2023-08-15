@@ -201,7 +201,6 @@ void Redistribution::Apply ( Box const& bx, int ncomp,
     } else if (redistribution_type == "StateRedist") {
 
         Box const& bxg1 = grow(bx,1);
-        Box const& bxg2 = grow(bx,2);
         Box const& bxg3 = grow(bx,3);
         Box const& bxg4 = grow(bx,4);
 
@@ -209,11 +208,11 @@ void Redistribution::Apply ( Box const& bx, int ncomp,
         // components identify the neighbors (utilizing the CellMap)
         IArrayBox itracker(bxg4,itracker_comp,The_Async_Arena());
 
-        FArrayBox nrs_fab(bxg3,1,The_Async_Arena());
+        FArrayBox nrs_fab(bxg4,1,The_Async_Arena());
         FArrayBox alpha_fab(bxg3,2,The_Async_Arena());
 
         // Total volume of all cells in my nbhd
-        FArrayBox nbhd_vol_fab(bxg2,1,The_Async_Arena());
+        FArrayBox nbhd_vol_fab(bxg3,1,The_Async_Arena());
 
         // Centroid of my nbhd
         FArrayBox cent_hat_fab(bxg3,AMREX_SPACEDIM,The_Async_Arena());
@@ -589,7 +588,6 @@ Redistribution::ApplyToInitialData ( Box const& bx, int ncomp,
         amrex::Error(msg);
     }
 
-    Box const& bxg2 = grow(bx,2);
     Box const& bxg3 = grow(bx,3);
     Box const& bxg4 = grow(bx,4);
 
@@ -603,11 +601,11 @@ Redistribution::ApplyToInitialData ( Box const& bx, int ncomp,
     //    use the first component of this for the number of neighbors
     IArrayBox itracker(bxg4,itracker_comp,The_Async_Arena());
 #endif
-    FArrayBox nrs_fab(bxg3,1,The_Async_Arena());
+    FArrayBox nrs_fab(bxg4,1,The_Async_Arena());
     FArrayBox alpha_fab(bxg3,2,The_Async_Arena());
 
     // Total volume of all cells in my nbhd
-    FArrayBox nbhd_vol_fab(bxg2,1,The_Async_Arena());
+    FArrayBox nbhd_vol_fab(bxg3,1,The_Async_Arena());
 
     // Centroid of my nbhd
     FArrayBox cent_hat_fab(bxg3,AMREX_SPACEDIM,The_Async_Arena());

@@ -71,11 +71,16 @@ Redistribution::MakeStateRedistUtils ( Box const& bx,
     if (is_periodic_z) domain_per_grown.grow(2,2);
 #endif
 
-    amrex::ParallelFor(bxg3,
+    amrex::ParallelFor(bxg4,
     [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept
     {
         // Everyone is in their own neighborhood at least
         nrs(i,j,k) = 1.;
+    });
+
+    amrex::ParallelFor(bxg3,
+    [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept
+    {
         alpha(i,j,k,0) = 1.;
         alpha(i,j,k,1) = 0.;
     });
@@ -91,14 +96,14 @@ Redistribution::MakeStateRedistUtils ( Box const& bx,
             int s = j+jmap[itracker(i,j,k,i_nbor)];
             int t = k+kmap[itracker(i,j,k,i_nbor)];
             if ( domain_per_grown.contains(IntVect(AMREX_D_DECL(r,s,t))) &&
-                 bxg3.contains(IntVect(AMREX_D_DECL(r,s,t))) )
+                 bxg4.contains(IntVect(AMREX_D_DECL(r,s,t))) )
             {
                 amrex::Gpu::Atomic::Add(&nrs(r,s,t),1.0_rt);
             }
         }
     });
 
-    amrex::ParallelFor(bxg2,
+    amrex::ParallelFor(bxg3,
     [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept
     {
         if (vfrac_old(i,j,k) > 0.0 || vfrac_new(i,j,k) > 0.0)
@@ -136,7 +141,7 @@ Redistribution::MakeStateRedistUtils ( Box const& bx,
     });
 
     // Define how much each cell keeps
-    amrex::ParallelFor(bxg2,
+    amrex::ParallelFor(bxg3,
     [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept
     {
         if (vfrac_new(i,j,k) > 0.0 || vfrac_old(i,j,k) > 0.0)
@@ -148,13 +153,15 @@ Redistribution::MakeStateRedistUtils ( Box const& bx,
                 int r = i+imap[itracker(i,j,k,i_nbor)];
                 int s = j+jmap[itracker(i,j,k,i_nbor)];
                 int t = k+kmap[itracker(i,j,k,i_nbor)];
-                amrex::Gpu::Atomic::Add(&alpha(r,s,t,0),-(alpha(i,j,k,1)/nrs(r,s,t)));
+                if ( bxg3.contains(IntVect(AMREX_D_DECL(r,s,t))) ) {
+                    amrex::Gpu::Atomic::Add(&alpha(r,s,t,0),-(alpha(i,j,k,1)/nrs(r,s,t)));
+                }
             }
         }
     });
 
     // Redefine nbhd_vol
-    amrex::ParallelFor(bxg2,
+    amrex::ParallelFor(bxg3,
     [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept
     {
         if (vfrac_new(i,j,k) > 0.0 || vfrac_old(i,j,k) > 0.0)
@@ -188,7 +195,7 @@ Redistribution::MakeStateRedistUtils ( Box const& bx,
     });
 
     // Define xhat,yhat,zhat (from Berger and Guliani)
-    amrex::ParallelFor(bxg3,
+    amrex::ParallelFor(bxg2,
     [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept
     {
         if (vfrac_new(i,j,k) > 0.0)
