@@ -19,6 +19,7 @@ incflo.initial_iterations   =   1
 #            INPUT AND OUTPUT           #
 #.......................................#
 amr.plot_int            =   10          # Steps between plot files
+amr.check_int = 1 
 amr.plt_regtest         =   1
 
 #¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨#
@@ -39,7 +40,7 @@ incflo.redistribution_type   =  "StateRedist"
 #¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨#
 #        ADAPTIVE MESH REFINEMENT       #
 #.......................................#
-amr.n_cell              =   136 64 64      # Grid cells at coarsest AMRlevel
+amr.n_cell              =   272 128 128 #136 64 64      # Grid cells at coarsest AMRlevel
 amr.max_level           =   0           # Max AMR level in hierarchy 
 amr.max_grid_size_x     =   1024
 amr.max_grid_size_y     =   1024
