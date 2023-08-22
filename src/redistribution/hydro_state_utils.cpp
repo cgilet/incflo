@@ -124,15 +124,31 @@ Redistribution::MakeStateRedistUtils ( Box const& bx,
             }
 
             if (itracker(i,j,k,0) > 0) {
+
                 if ( vfrac_old(i,j,k) > 0. ) {
                     alpha(i,j,k,1) = std::max(target_vol - vfrac_new(i,j,k), 0.0) / vol_of_nbors;
                     //alpha(i,j,k,1) = 1.;
                 } else {
                     //alpha(i,j,k,1) = std::max(target_vol - vfrac_new(i,j,k), 0.0) / vol_of_nbors;
-                    alpha(i,j,k,1) = Real(2.0);
+                    alpha(i,j,k,1) = Real(0.0);
+                }
+
+                // Loop over my neighbors to see if any is newly uncovered
+                // Assume NU is only in its own nbhd to start
+                for (int i_nbor = 1; i_nbor <= itracker(i,j,k,0); i_nbor++)
+                {
+                    int r = i+imap[itracker(i,j,k,i_nbor)];
+                    int s = j+jmap[itracker(i,j,k,i_nbor)];
+                    int t = k+kmap[itracker(i,j,k,i_nbor)];
+                    
+                    // maybe better to check flag here?
+                    if ( vfrac_old(r,s,t) == 0. )
+                    {
+                        alpha(i,j,k,1) = Real(2.0);
+                        break;
+                    }
                 }
             }
-
         } else {
             nbhd_vol(i,j,k) = 0.;
             alpha(i,j,k,0) = 0.;
@@ -169,11 +185,6 @@ Redistribution::MakeStateRedistUtils ( Box const& bx,
         {
             nbhd_vol(i,j,k)  = alpha(i,j,k,0) * vfrac_new(i,j,k);
 
-//fixme
-            // if ((i==9 || i==8) && j == 8) {
-            //  amrex::Print() << "nbhd_vol A: " << IntVect(i,j) << nbhd_vol(i,j,k) << std::endl;
-            // }
-
             // This loops over the neighbors of (i,j,k), and doesn't include (i,j,k) itself
             for (int i_nbor = 1; i_nbor <= itracker(i,j,k,0); i_nbor++)
             {
@@ -181,16 +192,7 @@ Redistribution::MakeStateRedistUtils ( Box const& bx,
                 int s = j+jmap[itracker(i,j,k,i_nbor)];
                 int t = k+kmap[itracker(i,j,k,i_nbor)];
                 amrex::Gpu::Atomic::Add(&nbhd_vol(i,j,k),alpha(i,j,k,1) * vfrac_new(r,s,t) / nrs(r,s,t));
-
-                // if ((i==9 || i==8) && j == 8) {
-                //     amrex::Print() << "nbhd_vol addition: " << IntVect(i,j) << vfrac_new(r,s,t) << std::endl;
-                // }
-
             }
-            // //fixme
-            // if ((i==9 || i==8) && j == 8) {
-            //  amrex::Print() << "nbhd_vol: " << IntVect(i,j) << nbhd_vol(i,j,k) << std::endl;
-            // }
         }
     });
 
