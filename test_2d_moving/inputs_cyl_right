@@ -64,7 +64,8 @@ incflo.geometry = "sphere"
 
 sphere.internal_flow = false
 sphere.radius = 0.4
-sphere.center = 0.505 0.800 0.0
+#sphere.center = 0.505 0.800 0.0
+sphere.center = 1.05 0.800 0.0
 
 #¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨¨#
 #           INITIAL CONDITIONS          #
