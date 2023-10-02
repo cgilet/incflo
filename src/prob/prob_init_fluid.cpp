@@ -21,8 +21,8 @@ void incflo::prob_init_fluid (int lev)
                  ld.velocity.setVal(m_ic_w, 2, 1););
 
     if (m_ntrac > 0) {
-        ld.tracer.setVal(0.0);
-        ld.tracer_o.setVal(0.0);
+        ld.tracer.setVal(1.0);
+        ld.tracer_o.setVal(1.0);
     }
 
     amrex::Print() <<" TYPE " << m_probtype << std::endl;
@@ -31,7 +31,22 @@ void incflo::prob_init_fluid (int lev)
     {
         const Box& vbx = mfi.validbox();
         const Box& gbx = mfi.fabbox();
-        if (0 == m_probtype || 114 == m_probtype )
+
+        if (0) {
+            Array4<Real> den_arr = ld.density.array(mfi);
+            amrex::ParallelFor(vbx, [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept
+            {
+                den_arr(i,j,k) = 1.0 + 0.1 * static_cast<Real>(23-i);
+                if ( den_arr(i,j,k) < 1.0 ){
+                    den_arr(i,j,k) = 1.0;
+                }
+                if ( i < 9 ) {
+                    den_arr(i,j,k) = 2.45; //1.0 + 0.1 * static_cast<Real>(23-9);
+                }
+                if (j == 3) amrex::Print() << "DEN " << i << " " << den_arr(i,j,k) << std::endl;
+            });
+
+        } else if (0 == m_probtype || 114 == m_probtype )
         { }
         else if (1 == m_probtype)
         {
