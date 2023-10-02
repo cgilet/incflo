@@ -502,7 +502,7 @@ void Redistribution::Apply ( Box const& bx, int ncomp,
             //     Print()<<Dim3{i,j,k}<<"alpha, beta, N : "<<alpha(i,j,k,0)<<" "<<alpha(i,j,k,1)
             //            <<" "<<nrs(i,j,k)<<std::endl;
             // }
- 
+
             //             }
             //         }
             //     }
