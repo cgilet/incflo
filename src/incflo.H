@@ -64,20 +64,20 @@ public:
     // Make a new level from scratch using provided BoxArray and DistributionMapping
     // Only used during initialization
     void MakeNewLevelFromScratch (int lev, amrex::Real time,
-                                          const amrex::BoxArray& new_grids,
-                                          const amrex::DistributionMapping& new_dmap) override;
+                                  const amrex::BoxArray& new_grids,
+                                  const amrex::DistributionMapping& new_dmap) override;
 
     // Make a new level using provided BoxArray and DistributionMapping,
     // and fill with interpolated coarse level data
     void MakeNewLevelFromCoarse (int lev, amrex::Real time,
-                                         const amrex::BoxArray& ba,
-                                         const amrex::DistributionMapping& dm) override;
+                                 const amrex::BoxArray& ba,
+                                 const amrex::DistributionMapping& dm) override;
 
     // Remake an existing level using provided BoxArray and DistributionMapping,
     // and fill with existing fine and coarse data
     void RemakeLevel (int lev, amrex::Real time,
-                              const amrex::BoxArray& ba,
-                              const amrex::DistributionMapping& dm) override;
+                      const amrex::BoxArray& ba,
+                      const amrex::DistributionMapping& dm) override;
 
 #ifdef INCFLO_USE_MOVING_EB
     void MakeNewEBGeometry (amrex::Real time);
@@ -87,7 +87,6 @@ public:
 
     // Delete level data
     void ClearLevel (int lev) override;
-
 
     void ComputeDt (int initialization, bool explicit_diffusion);
 
@@ -261,15 +260,15 @@ public:
     ///////////////////////////////////////////////////////////////////////////
 
     void compute_viscosity (amrex::Vector<amrex::MultiFab*> const& eta,
-                                    amrex::Vector<amrex::MultiFab*> const& rho,
-                                    amrex::Vector<amrex::MultiFab*> const& vel,
-                                    amrex::Real time, int nghost);
+                            amrex::Vector<amrex::MultiFab*> const& rho,
+                            amrex::Vector<amrex::MultiFab*> const& vel,
+                            amrex::Real time, int nghost);
     void compute_viscosity_at_level (int lev,
-                                             amrex::MultiFab* eta,
-                                             amrex::MultiFab* rho,
-                                             amrex::MultiFab* vel,
-                                             amrex::Geometry& lev_geom,
-                                             amrex::Real time, int nghost);
+                                     amrex::MultiFab* eta,
+                                     amrex::MultiFab* rho,
+                                     amrex::MultiFab* vel,
+                                     amrex::Geometry& lev_geom,
+                                     amrex::Real time, int nghost);
     void compute_tracer_diff_coeff (amrex::Vector<amrex::MultiFab*> const& tra_eta, int nghost);
 
 #ifdef AMREX_USE_EB
@@ -284,15 +283,15 @@ public:
                                                   amrex::Vector<amrex::MultiFab const*> const& w_mac));
 
     void redistribute_term ( amrex::MultiFab& result, amrex::MultiFab& result_tmp,
-                             amrex::MultiFab const& state,
-                             amrex::BCRec const* bc,
+			     amrex::MultiFab const& state,
+			     amrex::BCRec const* bc,
                              int lev,
                              amrex::MultiFab*& vel_eb);
     void redistribute_term ( amrex::MFIter const& mfi,
                              amrex::Array4<amrex::Real      > const& result,
                              amrex::Array4<amrex::Real      > const& result_tmp,
                              amrex::Array4<amrex::Real const> const& state,
-                             amrex::BCRec const* bc,
+			     amrex::BCRec const* bc,
                              int lev,
                              amrex::Array4<amrex::Real const> const& vel_eb);
     void redistribute_term ( amrex::MFIter const& mfi,
@@ -392,10 +391,6 @@ private:
 
     std::unique_ptr<Hydro::MacProjector> macproj;
 
-    int m_mac_mg_verbose = 0;
-    int m_mac_mg_bottom_verbose = 0;
-    int m_mac_mg_maxiter = 200;
-    int m_mac_mg_bottom_maxiter = 200;
     int m_mac_mg_max_coarsening_level = 100;
 
 #ifdef AMREX_USE_FLOAT
@@ -556,8 +551,8 @@ private:
     int m_last_chk = -1;
     int m_KE_int = -1;
     std::string m_check_file{"chk"};
-    std::string m_restart_file{""};
-    std::string m_tag_file{""};
+    std::string m_restart_file;
+    std::string m_tag_file;
 
     bool m_plotfile_on_restart = false;
 
@@ -697,15 +692,14 @@ private:
 
 #ifdef AMREX_USE_EB
 #ifdef INCFLO_USE_MOVING_EB
-    amrex::EBFArrayBoxFactory const&
-        EBFactory (int lev) const noexcept {
-            return static_cast<amrex::EBFArrayBoxFactory const&>(*m_new_factory[lev]);
+    [[nodiscard]] amrex::EBFArrayBoxFactory const&
+    EBFactory (int lev) const noexcept {
+        return static_cast<amrex::EBFArrayBoxFactory const&>(*m_new_factory[lev]);    }
+    [[nodiscard]] amrex::EBFArrayBoxFactory const&
+    OldEBFactory (int lev) const noexcept {
+        return static_cast<amrex::EBFArrayBoxFactory const&>(*m_old_factory[lev]);
     }
-    amrex::EBFArrayBoxFactory const&
-        OldEBFactory (int lev) const noexcept {
-            return static_cast<amrex::EBFArrayBoxFactory const&>(*m_old_factory[lev]);
-    }
-    amrex::EBFArrayBoxFactory const&
+    [[nodiscard]] amrex::EBFArrayBoxFactory const&
     EBFactory (int lev, amrex::Real time) const noexcept {
         if ( time == m_cur_time ) {
             return static_cast<amrex::EBFArrayBoxFactory const&>(*m_old_factory[lev]);
@@ -714,7 +708,7 @@ private:
         }
     }
 #else
-    amrex::EBFArrayBoxFactory const&
+    [[nodiscard]] amrex::EBFArrayBoxFactory const&
     EBFactory (int lev) const noexcept {
         return static_cast<amrex::EBFArrayBoxFactory const&>(*m_factory[lev]);
     }
@@ -753,7 +747,7 @@ private:
 
 #ifdef AMREX_USE_EB
     [[nodiscard]] static int nghost_eb_basic ()
-    { return 4; }
+    { return 5; }
 
     // We need 5 for doing StateRedistribution; otherwise 4 would be enough
     [[nodiscard]] static int nghost_eb_volume ()
@@ -870,13 +864,13 @@ private:
     void fillpatch_velocity (int lev, amrex::Real time, amrex::MultiFab& vel, int ng);
     void fillpatch_density (int lev, amrex::Real time, amrex::MultiFab& density, int ng);
     void fillpatch_tracer (int lev, amrex::Real time, amrex::MultiFab& tracer, int ng);
-    void fillpatch_gradp (int lev, amrex::Real time, amrex::MultiFab& gradp, int ng);
+    void fillpatch_gradp (int lev, amrex::Real time, amrex::MultiFab& gp, int ng);
     void fillpatch_force (amrex::Real time, amrex::Vector<amrex::MultiFab*> const& force, int ng);
 
     void fillcoarsepatch_velocity (int lev, amrex::Real time, amrex::MultiFab& vel, int ng);
     void fillcoarsepatch_density (int lev, amrex::Real time, amrex::MultiFab& density, int ng);
     void fillcoarsepatch_tracer (int lev, amrex::Real time, amrex::MultiFab& tracer, int ng);
-    void fillcoarsepatch_gradp (int lev, amrex::Real time, amrex::MultiFab& gradp, int ng);
+    void fillcoarsepatch_gradp (int lev, amrex::Real time, amrex::MultiFab& gp, int ng);
 
     void fillphysbc_velocity (int lev, amrex::Real time, amrex::MultiFab& vel, int ng);
     void fillphysbc_density (int lev, amrex::Real time, amrex::MultiFab& density, int ng);

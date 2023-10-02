@@ -5,8 +5,9 @@
 #ifdef AMREX_USE_EB
 #include <AMReX_EBAmrUtil.H>
 #include <utility>
-#include <memory>
 #endif
+
+#include <memory>
 
 using namespace amrex;
 

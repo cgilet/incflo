@@ -490,13 +490,13 @@ void DiffusionScalarOp::compute_laps (Vector<MultiFab*> const& a_laps,
         for(int lev = 0; lev <= finest_level; lev++)
         {
             // Flux redistribution
-            amrex::single_level_redistribute(laps_tmp[lev],
-                                             *a_laps[lev], 0, m_incflo->m_ntrac,
+	    amrex::single_level_redistribute(laps_tmp[lev],
+					     *a_laps[lev], 0, m_incflo->m_ntrac,
                                              m_incflo->Geom(lev));
             //
             // If we want to allow option of SRD, use incflo::redistribute_term.
             //
-            // auto const& bc = m_incflo->get_tracer_bcrec_device_ptr();
+	    // auto const& bc = m_incflo->get_tracer_bcrec_device_ptr();
             // m_incflo->redistribute_term(*a_laps[lev], laps_tmp[lev], *a_scalar[lev],
             //                          bc, lev, Array4<Real const>{});
         }
@@ -615,7 +615,7 @@ void DiffusionScalarOp::compute_divtau (Vector<MultiFab*> const& a_divtau,
 #else
         for(int lev = 0; lev <= finest_level; lev++)
         {
-            amrex::single_level_redistribute(divtau_tmp[lev],
+	    amrex::single_level_redistribute(divtau_tmp[lev],
                                              *a_divtau[lev], 0, a_divtau[lev]->nComp(),
                                              m_incflo->Geom(lev));
             //

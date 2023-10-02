@@ -82,21 +82,21 @@ incflo::compute_convective_term (Vector<MultiFab*> const& conv_u,
 
     for (int lev = 0; lev <= finest_level; ++lev) {
         AMREX_D_TERM(
-           face_x[lev].define(u_mac[lev]->boxArray(),dmap[lev],n_flux_comp,0,MFInfo(),u_mac[lev]->Factory());,
-           face_y[lev].define(v_mac[lev]->boxArray(),dmap[lev],n_flux_comp,0,MFInfo(),v_mac[lev]->Factory());,
-           face_z[lev].define(w_mac[lev]->boxArray(),dmap[lev],n_flux_comp,0,MFInfo(),w_mac[lev]->Factory()););
+           face_x[lev].define(u_mac[lev]->boxArray(),dmap[lev],n_flux_comp,0,MFInfo(),Factory(lev));,
+           face_y[lev].define(v_mac[lev]->boxArray(),dmap[lev],n_flux_comp,0,MFInfo(),Factory(lev));,
+           face_z[lev].define(w_mac[lev]->boxArray(),dmap[lev],n_flux_comp,0,MFInfo(),Factory(lev)););
         AMREX_D_TERM(
-           flux_x[lev].define(u_mac[lev]->boxArray(),dmap[lev],n_flux_comp,0,MFInfo(),u_mac[lev]->Factory());,
-           flux_y[lev].define(v_mac[lev]->boxArray(),dmap[lev],n_flux_comp,0,MFInfo(),v_mac[lev]->Factory());,
-           flux_z[lev].define(w_mac[lev]->boxArray(),dmap[lev],n_flux_comp,0,MFInfo(),w_mac[lev]->Factory()););
+           flux_x[lev].define(u_mac[lev]->boxArray(),dmap[lev],n_flux_comp,0,MFInfo(),Factory(lev));,
+           flux_y[lev].define(v_mac[lev]->boxArray(),dmap[lev],n_flux_comp,0,MFInfo(),Factory(lev));,
+           flux_z[lev].define(w_mac[lev]->boxArray(),dmap[lev],n_flux_comp,0,MFInfo(),Factory(lev)););
 
-        divu[lev].define(vel[lev]->boxArray(),dmap[lev],1,4,MFInfo(),vel[lev]->Factory());
+        divu[lev].define(vel[lev]->boxArray(),dmap[lev],1,4,MFInfo(),Factory(lev));
         if (m_advect_momentum)
             rhovel[lev].define(vel[lev]->boxArray(),dmap[lev],AMREX_SPACEDIM,
-                               vel[lev]->nGrow(),MFInfo(),vel[lev]->Factory());
+                               vel[lev]->nGrow(),MFInfo(),Factory(lev));
         if (m_advect_tracer && m_ntrac > 0)
-            rhotrac[lev].define(tracer[lev]->boxArray(),dmap[lev],tracer[lev]->nComp(),
-                                tracer[lev]->nGrow(),MFInfo(),tracer[lev]->Factory());
+            rhotrac[lev].define(vel[lev]->boxArray(),dmap[lev],tracer[lev]->nComp(),
+                                tracer[lev]->nGrow(),MFInfo(),Factory(lev));
 
         AMREX_D_TERM(faces[lev][0] = &face_x[lev];,
                      faces[lev][1] = &face_y[lev];,
@@ -109,11 +109,8 @@ incflo::compute_convective_term (Vector<MultiFab*> const& conv_u,
 
     // We now re-compute the velocity forcing terms including the pressure gradient,
     //    and compute the tracer forcing terms for the first time
-    if (m_advection_type != "MOL")
-    {
-        // FIXME - do we really need to do this? Didn't it just happen for extrap and MAC??
-        // what's passed in might or might not include gradp. Must recompute here to be sure
-        // Suppose technically could do if (m_use_mac_phi_in_godunov)
+    if (m_advection_type != "MOL") {
+        
         compute_vel_forces(vel_forces, vel, density, tracer, tracer);
 
         if (m_godunov_include_diff_in_forcing) {
@@ -252,12 +249,6 @@ incflo::compute_convective_term (Vector<MultiFab*> const& conv_u,
         AMREX_D_TERM(u[0] = u_mac[lev];,
                      u[1] = v_mac[lev];,
                      u[2] = w_mac[lev];);
-
-        // // CEG fixme
-        // VisMF::Write(*u_mac[0],"umac");
-        // VisMF::Write(*v_mac[0],"vmac");
-        // VisMF::Write(*vel[0],"va");
-        // VisMF::Write(*density[0],"ra");
 
 #ifdef AMREX_USE_EB
         const auto& ebfact =    EBFactory(lev, time);

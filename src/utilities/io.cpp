@@ -538,7 +538,7 @@ void incflo::WritePlotFile()
 
         Real offset = mf[0].sum(icomp,true);
         ParallelDescriptor::ReduceRealSum(offset);
-        offset *= Real(1.0)/grids[0].numPts();
+        offset *= Real(1.0)/Real(grids[0].numPts());
 
         for (int lev = 0; lev <= finest_level; ++lev)
         {
@@ -558,7 +558,7 @@ void incflo::WritePlotFile()
 
         Real offset = mf[0].sum(icomp,true);
         ParallelDescriptor::ReduceRealSum(offset);
-        offset *= Real(1.0)/grids[0].numPts();
+        offset *= Real(1.0)/Real(grids[0].numPts());
 
         for (int lev = 0; lev <= finest_level; ++lev)
         {
