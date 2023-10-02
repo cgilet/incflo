@@ -63,13 +63,13 @@ void incflo::InitData ()
         // with MakeNewLevelFromScratch.
         InitFromScratch(m_cur_time);
 
-// FIXME - do we want to keep both initial projections?
-#ifdef AMREX_USE_EB
-        amrex::Print() << "Doing initial projection before initial redistribution "  << std::endl;
-#endif
-        if (m_do_initial_proj) {
-            InitialProjection();
-        }
+// FIXME - do we want to keep both initial projections? Keeping this extra projection will break regtests
+// #ifdef AMREX_USE_EB
+//         amrex::Print() << "Doing initial projection before initial redistribution "  << std::endl;
+//        if (m_do_initial_proj) {
+//            InitialProjection();
+//        }
+// #endif
 
 #ifdef AMREX_USE_EB
         if (!EBFactory(0).isAllRegular()) {
