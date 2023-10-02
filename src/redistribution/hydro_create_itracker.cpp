@@ -168,7 +168,7 @@ Redistribution::MakeITracker ( Box const& bx,
             normalMerging(i, j, k,
                           AMREX_D_DECL(apx_new, apy_new, apz_new),
                           vfrac_new, itracker,
-                          lev_geom, target_volfrac, domain, 
+                          lev_geom, target_volfrac, domain,
                           AMREX_D_DECL(is_periodic_x, is_periodic_y, is_periodic_z));
         }
         // // WARNING, even with the CFL restriction of MOL, it will NOT always be the case that NU cells
@@ -208,7 +208,7 @@ Redistribution::MakeITracker ( Box const& bx,
     });
 
 // FIXME - need some check to make sure normalMerging doesn't put NU cells into neighborhoods.
-    
+
     // Need a separate loop because this adds to the neighbor's neighborhood
     // probably could alter normalMerging to allow for one loop...
     amrex::ParallelFor(bx_per_g4,
@@ -236,7 +236,7 @@ Redistribution::MakeITracker ( Box const& bx,
             //               AMREX_D_DECL(is_periodic_x, is_periodic_y, is_periodic_z));
         }
     });
-    
+
     // // For Newly Uncovered cells, make my neighbor's neighors my own neighbors
     // // since MSRD essentially removes the NU NB cell from the equations with alpha=0
     // amrex::ParallelFor(Box(itracker),
@@ -264,13 +264,13 @@ Redistribution::MakeITracker ( Box const& bx,
     //                         int koff2 = (AMREX_SPACEDIM < 3) ? 0 : map[2][itracker(ii,jj,kk,i_nbor2)];
 
     //                         itracker(i,j,k,0) += 1;
-                            
+
     //                         // WOuls need to extend the mapping to go 2 cells away....
     //                     }
     //             }
     //     }
     // });
-    
+
     // Check uncovered and covered cells, make sure the neighbors also include them.
     // Do this in newlyUncoveredNbhd instead...
 //     amrex::ParallelFor(Box(itracker),
@@ -309,10 +309,10 @@ Redistribution::MakeITracker ( Box const& bx,
         if ( (ii==45 && jj==21 && kk==40) )
         {
             amrex::Print() << "\nInitial Cell Merging" << std::endl;
-            
+
             for ( int i = ii-1; i<= ii+1; i++){
             for ( int j = jj-1; j<= jj+1; j++){
-            for ( int k = kk-1; k<= kk+1; k++){ 
+            for ( int k = kk-1; k<= kk+1; k++){
             if (itracker(i,j,k) > 0)
             {
             amrex::AllPrint() << "Cell " << Dim3{i,j,k} << " is merged with: ";
