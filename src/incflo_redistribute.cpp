@@ -15,7 +15,7 @@ incflo::redistribute_term ( MultiFab& result,
                             MultiFab*& vel_eb)
 {
     // ************************************************************************
-    // Redistribute result_tmp and pass out result
+    // Redistribute temporary and pass out result
     // ************************************************************************
     AMREX_ASSERT(result.nComp() == state.nComp());
 
@@ -152,9 +152,7 @@ incflo::redistribute_term ( MFIter const& mfi,
 	amrex::ParallelFor(bx, ncomp,
         [=] AMREX_GPU_DEVICE (int i, int j, int k, int n) noexcept
 	{
-	    //FIXME -- Need to check and make sure this is always how we want to
-	    // use this...
-            result(i,j,k,n) = state(i,j,k,n) + dt * temporary(i,j,k,n);
+            result(i,j,k,n) = temporary(i,j,k,n);
 	});
     }
 }
