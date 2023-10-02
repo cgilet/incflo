@@ -110,11 +110,11 @@ incflo::compute_convective_term (Vector<MultiFab*> const& conv_u,
     // We now re-compute the velocity forcing terms including the pressure gradient,
     //    and compute the tracer forcing terms for the first time
     if (m_advection_type != "MOL") {
-        
+
         compute_vel_forces(vel_forces, vel, density, tracer, tracer);
 
         if (m_godunov_include_diff_in_forcing) {
-            
+
             for (int lev = 0; lev <= finest_level; ++lev) {
                 auto& ld = *m_leveldata[lev];
 #ifdef _OPENMP
@@ -250,6 +250,7 @@ incflo::compute_convective_term (Vector<MultiFab*> const& conv_u,
                      u[1] = v_mac[lev];,
                      u[2] = w_mac[lev];);
 
+VisMF::Write(*u_mac[lev], "umac");
 #ifdef AMREX_USE_EB
         const auto& ebfact =    EBFactory(lev, time);
 
@@ -727,44 +728,46 @@ incflo::compute_convective_term (Vector<MultiFab*> const& conv_u,
         dtdt_tmp.FillBoundary(geom[lev].periodicity());
         //get_velocity_eb()[lev]->FillBoundary(geom[lev].periodicity());
 
+VisMF::Write(dvdt_tmp,"dvdt");
 //Was this OMP intentionally left off?
 #ifdef _OPENMP
 #pragma omp parallel if (Gpu::notInLaunchRegion())
 #endif
         for (MFIter mfi(*density[lev],TilingIfNotGPU()); mfi.isValid(); ++mfi)
         {
-	    Box const& bx = mfi.tilebox();
+            Box const& bx = mfi.tilebox();
 
             // SRD returning an update, not full state
 
-	    // velocity
-	    auto const& bc_vel = get_velocity_bcrec_device_ptr();
+            // velocity
+            auto const& bc_vel = get_velocity_bcrec_device_ptr();
             redistribute_term(mfi, conv_u[lev]->array(mfi), dvdt_tmp.array(mfi),
                               (m_advect_momentum) ? rhovel[lev].array(mfi) : vel[lev]->array(mfi),
                               bc_vel, lev, Array4<Real const>{});
 
-	    // density
-	    if (!m_constant_density) {
-		auto const& bc_den = get_density_bcrec_device_ptr();
+            // density
+            if (!m_constant_density) {
+                auto const& bc_den = get_density_bcrec_device_ptr();
                 redistribute_term(mfi, conv_r[lev]->array(mfi), drdt_tmp.array(mfi),
                                   density[lev]->array(mfi), bc_den, lev,
                                   Array4<Real const>{});
-	    } else {
-		auto const& drdt = conv_r[lev]->array(mfi);
-		amrex::ParallelFor(bx,
+            } else {
+                auto const& drdt = conv_r[lev]->array(mfi);
+                amrex::ParallelFor(bx,
                 [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept
-		{
-		    drdt(i,j,k) = 0.;
-		});
-	    }
+                {
+                    drdt(i,j,k) = 0.;
+                });
+            }
 
-	    if (m_advect_tracer) {
-		auto const& bc_tra = get_tracer_bcrec_device_ptr();
+            if (m_advect_tracer) {
+                auto const& bc_tra = get_tracer_bcrec_device_ptr();
                 redistribute_term(mfi, conv_t[lev]->array(mfi), dtdt_tmp.array(mfi),
                                   rhotrac[lev].array(mfi), bc_tra, lev,
                                   Array4<Real const>{});
-	    }
-	} // mfi
+            }
+        } // mfi
+VisMF::Write(*conv_u[lev],"conv");
 #endif
 #endif
     } // lev

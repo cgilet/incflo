@@ -296,7 +296,7 @@ void DiffusionTensorOp::compute_divtau (Vector<MultiFab*> const& a_divtau,
         for(int lev = 0; lev <= finest_level; lev++)
         {
             // Flux redistribution
-	    amrex::single_level_redistribute( divtau_tmp[lev], *a_divtau[lev], 0, AMREX_SPACEDIM, m_incflo->Geom(lev));
+            amrex::single_level_redistribute( divtau_tmp[lev], *a_divtau[lev], 0, AMREX_SPACEDIM, m_incflo->Geom(lev));
             //
             // If we want to allow option of SRD, use incflo::redistribute_term.
             //

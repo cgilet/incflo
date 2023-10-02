@@ -36,7 +36,7 @@ void incflo::Advance(Real orig_mass, Real& prev_mass)
     {
         m_t_old[lev] = m_cur_time;
         m_t_new[lev] = m_cur_time + m_dt;
-	Print()<<"ADVANCE times : "<<m_t_old[lev]<<" "<<m_t_new[lev]<<std::endl;
+        Print()<<"ADVANCE times : "<<m_t_old[lev]<<" "<<m_t_new[lev]<<std::endl;
     }
 
 #ifdef INCFLO_USE_MOVING_EB

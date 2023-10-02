@@ -169,7 +169,7 @@ normalMerging ( int i, int j, int /*k*/,
             if (debug_verbose > 0 )
             {
                 std::printf("Cell (%i,%i) with volfrac %.15f trying to ALSO1 merge with (%i,%i) "
-                            "with volfrac %.15f to get new sum_vol %.15f\n", 
+                            "with volfrac %.15f to get new sum_vol %.15f\n",
                             i, j, vfrac(i,j,k), i+ioff2, j+joff2, vfrac(i+ioff2,j+joff2,k), sum_vol);
             }
         }
@@ -346,7 +346,7 @@ newlyUncoveredNbhd ( int i, int j, int /*k*/,
         int me = getInvCellMap()[itracker(i,j,k,1)];
         itracker(i+ioff,j+joff,k,itracker(i+ioff,j+joff,k,0)) = me;
     }
-    
+
     Real sum_vol = vfrac(i,j,k) + vfrac(i+ioff,j+joff,k);
 
     // if ( i==10 && j==9 ) //( debug_verbose > 0 )
@@ -359,7 +359,7 @@ newlyUncoveredNbhd ( int i, int j, int /*k*/,
     if (sum_vol < target_volfrac)
     {
         std::printf("newlyUncoveredNbhd(): Couldn't merge with enough cells "
-                    "to raise volume at (%i,%i) to target %f. Stuck with sum_vol %f\n", 
+                    "to raise volume at (%i,%i) to target %f. Stuck with sum_vol %f\n",
                     i, j, target_volfrac, sum_vol);
     }
 

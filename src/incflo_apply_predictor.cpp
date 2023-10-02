@@ -825,10 +825,10 @@ void incflo::ApplyPredictor (bool incremental_projection)
     // // VisMF::Write(density_nph_neweb[0],"rnph");
     // VisMF::Write(m_leveldata[0]->velocity,"vel");
 
-    // std::string save = m_plot_file;
-    // m_plot_file = "pred";
-    // WritePlotFile();
-    // m_plot_file = save;
+    std::string save = m_plot_file;
+    m_plot_file = "pred";
+    WritePlotFile();
+    m_plot_file = save;
     // static int count = 0;
     // count++;
     //if (count > 0) Abort();

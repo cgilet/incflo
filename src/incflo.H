@@ -692,6 +692,7 @@ private:
 
 #ifdef AMREX_USE_EB
 #ifdef INCFLO_USE_MOVING_EB
+    // FIXME - probably should clean this up so we just have EBFactory(lev, time)
     [[nodiscard]] amrex::EBFArrayBoxFactory const&
     EBFactory (int lev) const noexcept {
         return static_cast<amrex::EBFArrayBoxFactory const&>(*m_new_factory[lev]);    }
@@ -710,6 +711,10 @@ private:
 #else
     [[nodiscard]] amrex::EBFArrayBoxFactory const&
     EBFactory (int lev) const noexcept {
+        return static_cast<amrex::EBFArrayBoxFactory const&>(*m_factory[lev]);
+    }
+    [[nodiscard]] amrex::EBFArrayBoxFactory const&
+    EBFactory (int lev, amrex::Real /*time*/) const noexcept {
         return static_cast<amrex::EBFArrayBoxFactory const&>(*m_factory[lev]);
     }
 #endif

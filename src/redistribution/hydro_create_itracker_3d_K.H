@@ -657,7 +657,7 @@ newlyUncoveredNbhd ( int i, int j, int k,
         int me = getInvCellMap()[itracker(i,j,k,1)];
         itracker(i+ioff,j+joff,k+koff,itracker(i+ioff,j+joff,k+koff,0)) = me;
     }
-    
+
     // For now, require we merge with only one other cell.
     Real sum_vol = vfrac(i,j,k) + vfrac(i+ioff,j+joff,k+koff);
     if (sum_vol < target_volfrac)
