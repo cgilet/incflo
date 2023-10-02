@@ -3,6 +3,6 @@ target_sources(incflo
    boundary_conditions.cpp
    incflo_fillpatch.cpp
    incflo_fillphysbc.cpp
-   incflo_set_velocity_bcs.cpp
+   incflo_set_inflow_velocity_bcs.cpp
    incflo_set_eb_bcs.cpp
    )
