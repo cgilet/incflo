@@ -140,7 +140,7 @@ Redistribution::MakeStateRedistUtils ( Box const& bx,
                     int r = i+imap[itracker(i,j,k,i_nbor)];
                     int s = j+jmap[itracker(i,j,k,i_nbor)];
                     int t = k+kmap[itracker(i,j,k,i_nbor)];
-                    
+
                     // maybe better to check flag here?
                     if ( vfrac_old(r,s,t) == 0. )
                     {
