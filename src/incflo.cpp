@@ -152,23 +152,28 @@ void incflo::Evolve()
     }
 #endif
 
-    Real orig_mass, prev_mass;
+    Real orig_mass, prev_mass, vol;
     int my_lev = 0;
 #ifdef AMREX_USE_EB
     auto const& fact = EBFactory(my_lev);
     orig_mass = volWgtSum(my_lev,get_density_new_const()[my_lev],0,fact);
+    vol = volWgtSum(my_lev,get_tracer_new_const()[my_lev],0,fact);
 #else
     orig_mass = volWgtSum(my_lev,get_density_new_const()[my_lev],0);
 #endif
     auto const dx = geom[my_lev].CellSize();
 #if (AMREX_SPACEDIM == 2)
     orig_mass *= dx[0] * dx[1];
+    vol *= dx[0] * dx[1];
 #elif (AMREX_SPACEDIM == 3)
     orig_mass *= dx[0] * dx[1] * dx[2];
+    vol *= dx[0] * dx[1] * dx[2];
 #endif
     prev_mass = orig_mass;
     amrex::Print() << "Sum of mass at time = " << m_cur_time << " " <<
                        orig_mass << std::endl;
+    amrex::Print() << "Domain vol at time = " << m_cur_time << " " <<
+                       vol << std::endl;
 
     while(!do_not_evolve)
     {
@@ -187,7 +192,7 @@ void incflo::Evolve()
         }
 
         // Advance to time t + dt
-        Advance(orig_mass, prev_mass);
+        Advance(orig_mass, prev_mass, vol);
 
 #ifdef INCFLO_USE_MOVING_EB
         if (m_eb_flow_plt_drag_hist){

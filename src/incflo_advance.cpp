@@ -7,7 +7,7 @@
 
 using namespace amrex;
 
-void incflo::Advance(Real orig_mass, Real& prev_mass)
+void incflo::Advance(Real orig_mass, Real& prev_mass, Real& prev_vol)
 {
     BL_PROFILE("incflo::Advance");
 
@@ -85,6 +85,8 @@ void incflo::Advance(Real orig_mass, Real& prev_mass)
 #ifdef AMREX_USE_EB
     auto const& fact = EBFactory(my_lev);
     Real sum = volWgtSum(my_lev,get_density_new_const()[my_lev],0,fact);
+    m_leveldata[0]->tracer.setVal(1.);
+    Real vol = volWgtSum(my_lev,get_tracer_new_const()[my_lev],0,fact);
 #else
     Real sum = volWgtSum(my_lev,get_density_new_const()[my_lev],0);
 #endif
@@ -92,50 +94,64 @@ void incflo::Advance(Real orig_mass, Real& prev_mass)
     auto const dx = geom[my_lev].CellSize();
 #if (AMREX_SPACEDIM == 2)
     sum *= dx[0] * dx[1];
+    vol *= dx[0] * dx[1];
 #elif (AMREX_SPACEDIM == 3)
     sum *= dx[0] * dx[1] * dx[2];
+    vol *= dx[0] * dx[1] * dx[2];
 #endif
 
-    amrex::Print() << "Pred:Sum of mass at time = " << m_cur_time+m_dt << " " << sum << " " << std::endl;
-//  amrex::Print() << "Change over time divided by time and area " << (sum - orig_mass) / (m_cur_time+m_dt) / 1.6 <<
-//                    " using " << sum << " " << orig_mass << " " << m_cur_time+m_dt << std::endl;
+    amrex::Print() << "Pred:Change in domain volume " << (vol - prev_vol) << std::endl;
+    amrex::Print() << "Pred:Change in domain mass   " << (sum - prev_mass) << std::endl;
+    amrex::Print() << "Pred:Change error   " << (sum - prev_mass - vol + prev_vol)/ (vol-prev_vol) << std::endl;
+    //amrex::Print() << "Pred:Change in domain mass 2D" << (sum - prev_mass - (2.45*.1*.001*16 - .1*.001*16) ) << std::endl;
+    //amrex::Print() << "Pred:Change in domain mass 3D" << (sum - prev_mass - (0.1*.1*.001*16*16 - 0.1*.1*.001*16) ) << std::endl;
+    // amrex::Print() << "Pred:Sum of mass at time = " << m_cur_time+m_dt << " " << sum << " " << std::endl;
     amrex::Print() << "Pred:Change over time in last time step divided by time and area " << (sum - prev_mass) / m_dt / 1.6 <<
                       " using " << sum << " " << prev_mass << " " << m_dt << std::endl;
 
 #endif
 
-    if (m_advection_type == "MOL") {
-        for (int lev = 0; lev <= finest_level; ++lev) {
-            fillpatch_velocity(lev, m_t_new[lev], m_leveldata[lev]->velocity, ng);
-            fillpatch_density(lev, m_t_new[lev], m_leveldata[lev]->density, ng);
-            if (m_advect_tracer) {
-                fillpatch_tracer(lev, m_t_new[lev], m_leveldata[lev]->tracer, ng);
-            }
-        }
+    // if (m_advection_type == "MOL") {
+    //     for (int lev = 0; lev <= finest_level; ++lev) {
+    //         fillpatch_velocity(lev, m_t_new[lev], m_leveldata[lev]->velocity, ng);
+    //         fillpatch_density(lev, m_t_new[lev], m_leveldata[lev]->density, ng);
+    //         if (m_advect_tracer) {
+    //             fillpatch_tracer(lev, m_t_new[lev], m_leveldata[lev]->tracer, ng);
+    //         }
+    //     }
 
-        ApplyCorrector();
-    }
+    //     ApplyCorrector();
+    // }
 
 #if 1
-#ifdef AMREX_USE_EB
-    sum = volWgtSum(my_lev,get_density_new_const()[my_lev],0,fact);
-#else
-    sum = volWgtSum(my_lev,get_density_new_const()[my_lev],0);
-#endif
+// #ifdef AMREX_USE_EB
+//     sum = volWgtSum(my_lev,get_density_new_const()[my_lev],0,fact);
+//     m_leveldata[0]->tracer.setVal(1.);
+//     vol = volWgtSum(my_lev,get_tracer_new_const()[my_lev],0,fact);
+// #else
+//     sum = volWgtSum(my_lev,get_density_new_const()[my_lev],0);
+// #endif
 
-#if (AMREX_SPACEDIM == 2)
-    sum *= dx[0] * dx[1];
-#elif (AMREX_SPACEDIM == 3)
-    sum *= dx[0] * dx[1] * dx[2];
-#endif
+// #if (AMREX_SPACEDIM == 2)
+//     sum *= dx[0] * dx[1];
+//     vol *= dx[0] * dx[1];
+// #elif (AMREX_SPACEDIM == 3)
+//     sum *= dx[0] * dx[1] * dx[2];
+//     vol *= dx[0] * dx[1] * dx[2];
+// #endif
 
-    amrex::Print() << "Corr:Sum of mass at time = " << m_cur_time+m_dt << " " << sum << " " << std::endl;
-//  amrex::Print() << "Change over time divided by time and area " << (sum - orig_mass) / (m_cur_time+m_dt) / 1.6 <<
-//                    " using " << sum << " " << orig_mass << " " << m_cur_time+m_dt << std::endl;
-    amrex::Print() << "Corr:Change over time in last time step divided by time and area " << (sum - prev_mass) / m_dt / 1.6 <<
-                      " using " << sum << " " << prev_mass << " " << m_dt << std::endl;
+//     amrex::Print() << "Corr:Change in domain volume " << (vol - prev_vol) <<std::endl;
+//     amrex::Print() << "Corr:Change in domain mass   " << (sum - prev_mass)/3. << std::endl;
+//     amrex::Print() << "Corr:Change in domain mass   " << (sum - prev_mass - (2.45*.1*.001*16 - .1*.001*16) )/3. << std::endl;
+//     //if ( std::abs( (vol - prev_vol) -  (sum - prev_mass) ) > 1e-14 ) Abort("Vol diff and dens diff are off");
+//     // amrex::Print() << "Corr:Sum of mass at time = " << m_cur_time+m_dt << " " << sum << " " << std::endl;
+// //  amrex::Print() << "Change over time divided by time and area " << (sum - orig_mass) / (m_cur_time+m_dt) / 1.6 <<
+// //                    " using " << sum << " " << orig_mass << " " << m_cur_time+m_dt << std::endl;
+//     amrex::Print() << "Corr:Change over time in last time step divided by time and area " << (sum - prev_mass) / m_dt / 1.6 <<
+//                       " using " << sum << " " << prev_mass << " " << m_dt << std::endl;
 
     prev_mass = sum;
+     prev_vol = vol;
 #endif
 
     // Stop timing current time step

@@ -124,14 +124,7 @@ Redistribution::MakeStateRedistUtils ( Box const& bx,
             }
 
             if (itracker(i,j,k,0) > 0) {
-
-                if ( vfrac_old(i,j,k) > 0. ) {
-                    alpha(i,j,k,1) = std::max(target_vol - vfrac_new(i,j,k), 0.0) / vol_of_nbors;
-                    //alpha(i,j,k,1) = 1.;
-                } else {
-                    //alpha(i,j,k,1) = std::max(target_vol - vfrac_new(i,j,k), 0.0) / vol_of_nbors;
-                    alpha(i,j,k,1) = Real(0.0);
-                }
+                alpha(i,j,k,1) = std::max(target_vol - vfrac_new(i,j,k), 0.0) / vol_of_nbors;
 
                 // Loop over my neighbors to see if any is newly uncovered
                 // Assume NU is only in its own nbhd to start
@@ -141,7 +134,6 @@ Redistribution::MakeStateRedistUtils ( Box const& bx,
                     int s = j+jmap[itracker(i,j,k,i_nbor)];
                     int t = k+kmap[itracker(i,j,k,i_nbor)];
 
-                    // maybe better to check flag here?
                     if ( vfrac_old(r,s,t) == 0. )
                     {
                         alpha(i,j,k,1) = Real(2.0);

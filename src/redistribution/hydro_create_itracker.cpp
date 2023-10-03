@@ -382,7 +382,7 @@ Redistribution::MakeITracker ( Box const& bx,
     amrex::Print() << std::endl;
 #endif
 
-#if 0
+#if 1
     amrex::Print() << "Post Update to Cell Merging" << std::endl;
 
     amrex::ParallelFor(Box(itracker),

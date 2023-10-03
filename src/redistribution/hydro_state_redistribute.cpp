@@ -10,8 +10,10 @@
 #include <AMReX_EB_StateRedistSlopeLimiter_K.H>
 #if (AMREX_SPACEDIM == 2)
 #include <AMReX_EB_Slopes_2D_K.H>
+#include <hydro_create_itracker_2d_K.H>
 #elif (AMREX_SPACEDIM == 3)
 #include <AMReX_EB_Slopes_3D_K.H>
+#include <hydro_create_itracker_3d_K.H>
 #endif
 
 using namespace amrex;
@@ -32,8 +34,10 @@ Redistribution::StateRedistribute ( Box const& bx, int ncomp,
                                     Array4< int const> const& itracker,
                                     Array4<Real const> const& nrs,
                                     Array4<Real const> const& alpha,
-                                    Array4<Real const> const& nbhd_vol,
+                                    Array4<Real      > const& nbhd_vol,
                                     Array4<Real const> const& cent_hat,
+                                    Array4<Real const> const& kappa,
+                                    Array4<Real const> const& ubar,
                                     Geometry const& lev_geom,
                                     const int max_order)
 {
@@ -103,6 +107,9 @@ Redistribution::StateRedistribute ( Box const& bx, int ncomp,
     FArrayBox    soln_hat_fab (bxg3,ncomp,The_Async_Arena());
     Array4<Real> soln_hat = soln_hat_fab.array();
 
+    FArrayBox    kappa_hat_fab (bxg3,ncomp,The_Async_Arena());
+    Array4<Real> kappa_hat = kappa_hat_fab.array();
+
     // Define Qhat (from Berger and Guliani) - the weighted solution average
     // Here we initialize soln_hat to equal U_in on all cells in bxg3 so that
     //      in the event we need to use soln_hat 3 cells out from the bx limits
@@ -113,6 +120,7 @@ Redistribution::StateRedistribute ( Box const& bx, int ncomp,
     {
         for (int n = 0; n < ncomp; n++){
             soln_hat(i,j,k,n) = U_in(i,j,k,n);
+            kappa_hat(i,j,k,n) = 0.;
         }
 
         if ( ( vfrac_new(i,j,k) > 0.0 || vfrac_old(i,j,k) > 0.0 )
@@ -121,7 +129,8 @@ Redistribution::StateRedistribute ( Box const& bx, int ncomp,
         {
             // Start with U_in(i,j,k) itself
             for (int n = 0; n < ncomp; n++){
-                soln_hat(i,j,k,n) = U_in(i,j,k,n) * alpha(i,j,k,0) * vfrac_old(i,j,k);
+                soln_hat(i,j,k,n) = alpha(i,j,k,0) * U_in(i,j,k,n) * vfrac_old(i,j,k);
+                kappa_hat(i,j,k,n) = alpha(i,j,k,0) * kappa(i,j,k);
             }
 
             // This loops over the neighbors of (i,j,k), and doesn't include (i,j,k) itself
@@ -134,7 +143,8 @@ Redistribution::StateRedistribute ( Box const& bx, int ncomp,
                 if (domain_per_grown.contains(IntVect(AMREX_D_DECL(r,s,t))))
                 {
                     for (int n = 0; n < ncomp; n++){
-                        soln_hat(i,j,k,n) += U_in(r,s,t,n) * alpha(i,j,k,1) * vfrac_old(r,s,t) / nrs(r,s,t);
+                        soln_hat(i,j,k,n) += alpha(i,j,k,1) * U_in(r,s,t,n)*vfrac_old(r,s,t) / nrs(r,s,t);
+                        kappa_hat(i,j,k,n) += alpha(i,j,k,1) * kappa(r,s,t) / nrs(r,s,t);
                     }
 
                 }
@@ -147,11 +157,36 @@ Redistribution::StateRedistribute ( Box const& bx, int ncomp,
             }
             for (int n = 0; n < ncomp; n++)  {
                 if (nbhd_vol(i,j,k) < 1e-14 ){
+                    // If we're here alpha = beta = 0, and could also use Qhat = vfold*U_in/vfnew
+                    // see comment below...
                     soln_hat(i,j,k,n) = Real(0.0);
+                    // FIXME - think about if check needed here...
+                    kappa_hat(i,j,k,n) = Real(0.0);
                 } else {
                     soln_hat(i,j,k,n) /= nbhd_vol(i,j,k);
+                    kappa_hat(i,j,k,n) /= nbhd_vol(i,j,k);
                 }
             }
+        }
+    });
+
+    // FIXME - In preparation for 3D case where we need alpha, beta to depend on the state...
+    // I *think* this could work for more than 1 NU cell in the NBHD
+    FArrayBox alpha_meb_fab(bxg3,ncomp,The_Async_Arena());
+    Array4<Real> alpha_meb = alpha_meb_fab.array();
+    FArrayBox beta_meb_fab(bxg3,ncomp,The_Async_Arena());
+    Array4<Real> beta_meb = beta_meb_fab.array();
+    // FArrayBox Vhat_meb_fab(bxg3,ncomp,The_Async_Arena());
+    // Array4<Real> Vhat_meb = Vhat_meb_fab.array();
+
+    amrex::ParallelFor(bxg3,
+    [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept
+    {
+        // initialize the new alpha, beta
+        for ( int n = 0; n < ncomp; n++){
+            alpha_meb(i,j,k,n) = alpha(i,j,k,0);
+            beta_meb(i,j,k,n) = alpha(i,j,k,1);
+            // Vhat_meb(i,j,k,n) = nbhd_vol(i,j,k);
         }
     });
 
@@ -162,32 +197,34 @@ Redistribution::StateRedistribute ( Box const& bx, int ncomp,
     FArrayBox    ssoln_hat_fab (bxg4,ncomp,The_Async_Arena());
     Array4<Real> slope_soln_hat = ssoln_hat_fab.array();
 
-    amrex::ParallelFor(bxg3,
-    [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept
-    {
-        for (int n = 0; n < ncomp; n++)
-        {
-            slope_soln_hat(i,j,k,n) = soln_hat(i,j,k,n);
-        }
-    });
-    amrex::ParallelFor(bxg3,
+    // FIXME - this breaks with OOB error with bxg3...
+    // above loop only computes full soln_hat on bxg2 ...
+    amrex::ParallelFor(bxg2 & domain_per_grown,
     [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept
     {
         if ( vfrac_old(i,j,k) == 0. && vfrac_new(i,j,k) > 0. ) {
+            // FIXME? for now we assume NU has one and only 1 merging partner (but no neighbors of its own)
+            int i_nbor = 1;
             // This loops over the neighbors of (i,j,k), and doesn't include (i,j,k) itself
-            for (int i_nbor = 1; i_nbor <= itracker(i,j,k,0); i_nbor++)
+            //for (int i_nbor = 1; i_nbor <= itracker(i,j,k,0); i_nbor++)
             {
+                // Print()<<"vfracs "<<vfrac_old(i,j,k)<<" "<<vfrac_new(i,j,k)<<std::endl;
+                // Print()<<Dim3{i,j,k}<<"itracker "<<itracker(i,j,k,1)<<std::endl;
+
                 int r = i+imap[itracker(i,j,k,i_nbor)];
                 int s = j+jmap[itracker(i,j,k,i_nbor)];
                 int t = k+kmap[itracker(i,j,k,i_nbor)];
 
-                if (domain_per_grown.contains(IntVect(AMREX_D_DECL(r,s,t))))
+                for (int n = 0; n < ncomp; n++)
                 {
-                    for (int n = 0; n < ncomp; n++)
-                    {
-                        slope_soln_hat(r,s,t,n) = soln_hat(i,j,k,n);
-                    }
+                    slope_soln_hat(i,j,k,n) = soln_hat(r,s,t,n);
                 }
+            }
+        }
+        else {
+            for (int n = 0; n < ncomp; n++)
+            {
+                slope_soln_hat(i,j,k,n) = soln_hat(i,j,k,n);
             }
         }
     });
@@ -206,7 +243,8 @@ Redistribution::StateRedistribute ( Box const& bx, int ncomp,
                 if (bx.contains(IntVect(AMREX_D_DECL(i,j,k))))
                 {
                     for (int n = 0; n < ncomp; n++) {
-                        amrex::Gpu::Atomic::Add(&U_out(i,j,k,n),alpha(i,j,k,0)*nrs(i,j,k)*soln_hat(i,j,k,n));
+                        amrex::Gpu::Atomic::Add(&U_out(i,j,k,n),alpha_meb(i,j,k,n)*nrs(i,j,k)*
+                                                (soln_hat(i,j,k,n) + kappa_hat(i,j,k,n)*ubar(i,j,k,n)));
                     }
                 }
             }
@@ -322,11 +360,13 @@ Redistribution::StateRedistribute ( Box const& bx, int ncomp,
                     // Add to the cell itself
                     if (bx.contains(IntVect(AMREX_D_DECL(i,j,k))))
                     {
+// soln_hat doesn't include kappa now...
                         Real update = soln_hat(i,j,k,n);
                         AMREX_D_TERM(update += lim_slope[0] * (ccent(i,j,k,0)-cent_hat(i,j,k,0));,
                                      update += lim_slope[1] * (ccent(i,j,k,1)-cent_hat(i,j,k,1));,
                                      update += lim_slope[2] * (ccent(i,j,k,2)-cent_hat(i,j,k,2)););
-                        amrex::Gpu::Atomic::Add(&U_out(i,j,k,n),alpha(i,j,k,0)*nrs(i,j,k)*update);
+                        amrex::Gpu::Atomic::Add(&U_out(i,j,k,n),alpha_meb(i,j,k,n)*nrs(i,j,k)*
+                                                (update + kappa_hat(i,j,k,n)*ubar(i,j,k,n)));
                     } // if bx contains
 
                     // This loops over the neighbors of (i,j,k), and doesn't include (i,j,k) itself
@@ -342,7 +382,8 @@ Redistribution::StateRedistribute ( Box const& bx, int ncomp,
                             AMREX_D_TERM(update += lim_slope[0] * (ccent(r,s,t,0)-cent_hat(i,j,k,0) + static_cast<Real>(r-i));,
                                          update += lim_slope[1] * (ccent(r,s,t,1)-cent_hat(i,j,k,1) + static_cast<Real>(s-j));,
                                          update += lim_slope[2] * (ccent(r,s,t,2)-cent_hat(i,j,k,2) + static_cast<Real>(t-k)););
-                            amrex::Gpu::Atomic::Add(&U_out(r,s,t,n),alpha(i,j,k,1)*update);
+                            amrex::Gpu::Atomic::Add(&U_out(r,s,t,n),beta_meb(i,j,k,n)*
+                                                    (update + kappa_hat(i,j,k,n)*ubar(r,s,t,n)));
 
 
                         } // if bx contains

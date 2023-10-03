@@ -219,6 +219,11 @@ void Redistribution::Apply ( Box const& bx, int ncomp,
         // Centroid of my nbhd
         FArrayBox cent_hat_fab(bxg3,AMREX_SPACEDIM,The_Async_Arena());
 
+        // Keep the MEB correction separate from Uhat to be able to experiment
+        // Also keep the state in the MEB correction term separate for same reason
+        FArrayBox kappa_fab(bxg3,1,The_Async_Arena());
+        FArrayBox ubar_fab(bxg3,ncomp,The_Async_Arena());
+
         Array4<int> itr = itracker.array();
         Array4<int const> itr_const = itracker.const_array();
 
@@ -233,6 +238,12 @@ void Redistribution::Apply ( Box const& bx, int ncomp,
 
         Array4<Real      > cent_hat       = cent_hat_fab.array();
         Array4<Real const> cent_hat_const = cent_hat_fab.const_array();
+
+        Array4<Real      > kappa       = kappa_fab.array();
+        Array4<Real const> kappa_const = kappa_fab.const_array();
+
+        Array4<Real      > ubar       = ubar_fab.array();
+        Array4<Real const> ubar_const = ubar_fab.const_array();
 
         Box domain_per_grown = lev_geom.Domain();
         AMREX_D_TERM(if (lev_geom.isPeriodic(0)) domain_per_grown.grow(0,1);,
@@ -311,32 +322,24 @@ void Redistribution::Apply ( Box const& bx, int ncomp,
             amrex::ParallelFor(Box(scratch), ncomp,
             [=] AMREX_GPU_DEVICE (int i, int j, int k, int n) noexcept
             {
-                if (vfrac_new(i,j,k) > 0. && vfrac_new(i,j,k) < 1. && vfrac_old(i,j,k) == 0.)
-                {
-                    // Newly Uncovered cells:
-                    // For SRD without slopes, it shouldn't matter what's in here because
-                    // it gets mult by V^n which is zero
-                    scratch(i,j,k,n) = U_in(i,j,k,n);
-                }
-                else if ( (vfrac_old(i,j,k) > 0. && vfrac_old(i,j,k) < 1.0) ||
-                         (vfrac_old(i,j,k) == 1. &&
-                          (!flag_old(i,j,k).isRegular() || !flag_new(i,j,k).isRegular()) ))
+                // if (vfrac_new(i,j,k) > 0. && vfrac_old(i,j,k) == 0.)
+                // {
+                //     // Newly Uncovered cells:
+                //     // For SRD without slopes, it shouldn't matter what's in here because
+                //     // it gets mult by V^n which is zero
+                //     scratch(i,j,k,n) = U_in(i,j,k,n);
+                // }
+                // else
+                if ( (vfrac_old(i,j,k) > 0. && vfrac_old(i,j,k) < 1.0) ||
+                     (vfrac_new(i,j,k) > 0. && vfrac_old(i,j,k) == 0.) ||
+                     (vfrac_old(i,j,k) == 1. &&
+                      (!flag_old(i,j,k).isRegular() || !flag_new(i,j,k).isRegular()) ))
                 {
                     // Correct all cells that are cut at time n or become cut at time n+1
                     Real delta_divU = 0.0;
                     Real Ueb_dot_an = 0.0;
                     Real delta_vol = (vfrac_new(i,j,k) - vfrac_old(i,j,k))/dt;
 
-                    // Commented if() below was to force delta_divU = 0 for newly covered (NC) cells,
-                    // as should be true in 1D
-                    // For inputs_box_right (2D), we don't stay constant for predictor
-                    // if we don't include this for NC. Along with NC corrector addition,
-                    // we can get box_right to work for covering (but not uncovering), BUT this breaks
-                    // variable density 1D (inputs_moving_right)
-                    //
-                    // We need this correction for NU but not for NC in 1D.
-                    // if (!flag_old(i,j,k).isRegular() && !flag_new(i,j,k).isCovered()
-                    //     && std::abs(delta_vol) > eps )
                     {
                         Ueb_dot_an =
                             AMREX_D_TERM(  vel_eb_old(i,j,k,0)*bnorm_old(i,j,k,0) * dxinv[0],
@@ -344,9 +347,10 @@ void Redistribution::Apply ( Box const& bx, int ncomp,
                                            + vel_eb_old(i,j,k,2)*bnorm_old(i,j,k,2) * dxinv[2] );
                         Ueb_dot_an *= barea_old(i,j,k);
 
-                        delta_divU = (delta_vol - Ueb_dot_an) * U_in(i,j,k,n);
+                        delta_divU = (delta_vol - Ueb_dot_an); //* U_in(i,j,k,n);
                     }
 
+                    // FIXME - need to think through NU case here
                     // For the Corrector step
                     if (//!flag_new(i,j,k).isCovered() && std::abs(delta_vol) > eps &&
                         vel_eb_new)
@@ -357,19 +361,17 @@ void Redistribution::Apply ( Box const& bx, int ncomp,
                                          + vel_eb_new(i,j,k,2)*bnorm_new(i,j,k,2) * dxinv[2] );
                         Ueb_dot_an_new *= barea_new(i,j,k);
 
-                        //FIXME? I think this only applied to NC situation...
-                        // if ( flag_old(i,j,k).isRegular() ){
-                        //     // FIXME - not really sure if we want to average U or just take out...
-                        //     delta_divU = 0.5 * (U_in(i,j,k,n) + out(i,j,k,n)) * delta_vol
-                        //         - 0.5 * out(i,j,k,n) * Ueb_dot_an_new;
-                        // } else
                         if ( flag_new(i,j,k).isCovered() ) {
                             // Use half of Ueb_dot_an and the full delta_vol
                             // Needed to get 2D inputs_box_right to stay constant for covering
-                                delta_divU = Real(0.5) * (delta_divU + delta_vol*U_in(i,j,k,n) );
+                            delta_divU = Real(0.5) * (delta_divU + delta_vol); //*U_in(i,j,k,n) );
                         } else {
                             delta_divU = Real(0.5) * (delta_divU
-                                                      + out(i,j,k,n) * (delta_vol - Ueb_dot_an_new));
+                                                      + (delta_vol - Ueb_dot_an_new));
+                            // fixme - need to think about this. if this correction is really assoc
+                            // with the advective term, then we really need to be using some average
+                            // time n+1 value to multiply here, but then could we just use Qhat??
+                            // + out(i,j,k,n) * (delta_vol - Ueb_dot_an_new));
                         }
                     // if ( i==9 && j==8){
                     //     Print()<<"NU DELTA DIVU "<<delta_divU
@@ -389,50 +391,37 @@ void Redistribution::Apply ( Box const& bx, int ncomp,
                     }
 
                     // This will undo volume scaling that happens later in forming q-hat
-                    delta_divU /= vfrac_old(i,j,k);
+                    //delta_divU /= vfrac_old(i,j,k);
+                    // If we separate out kappa, then that mult by vfrac_old will never happen,
+                    // so don't need this...
 
-                    scratch(i,j,k,n) = U_in(i,j,k,n) + dt * dUdt_in(i,j,k,n)
-                        + dt * delta_divU;
+                    scratch(i,j,k,n) = U_in(i,j,k,n) + dt * dUdt_in(i,j,k,n);
+                    kappa(i,j,k) = dt * delta_divU;
 
-                    // Now look at my neighbors. If any is NU then I take its' correction
+                    // Now compute my nbhd Ubar
+                    Real Vbar = vfrac_old(i,j,k);
+                    ubar(i,j,k,n) = vfrac_old(i,j,k)*U_in(i,j,k,n);
+                    // Real Vbar = alpha(i,j,k,0)*vfrac_old(i,j,k);
+                    // ubar(i,j,k,n) = alpha(i,j,k,0)*vfrac_old(i,j,k)*U_in(i,j,k,n);
+                    // Real Vbar = Real(1.0);
+                    // ubar(i,j,k,n) = U_in(i,j,k,n);
                     for (int i_nbor = 1; i_nbor <= itr(i,j,k,0); i_nbor++)
                     {
                         int r = i+map[0][itr(i,j,k,i_nbor)];
                         int s = j+map[1][itr(i,j,k,i_nbor)];
                         int t = k+((AMREX_SPACEDIM < 3) ? 0 : map[2][itr(i,j,k,i_nbor)]);
 
-                        if ( vfrac_old(r,s,t) == 0.0 && vfrac_new(r,s,t) > 0.0 )
-                        {
-                        // if ( Box(scratch).contains(Dim3{i+ioff,j+joff,k+koff}) )
-                        // {
-                            Real delta_vol = vfrac_new(r,s,t) / dt;
-                            Real delta_divU = delta_vol * U_in(i,j,k,n);
-
-                            if ( vel_eb_new) {
-                                Real Ueb_dot_n =
-                                    AMREX_D_TERM(  vel_eb_new(r,s,t,0)*bnorm_new(r,s,t,0) * dxinv[0],
-                                                 + vel_eb_new(r,s,t,1)*bnorm_new(r,s,t,1) * dxinv[1],
-                                                 + vel_eb_new(r,s,t,2)*bnorm_new(r,s,t,2) * dxinv[2] );
-
-                                Ueb_dot_n *= barea_new(r,s,t);
-
-                                // if ( i==20 && j==8){
-                                //     Print()<<"NU DELTA VOL "<<delta_divU<<std::endl;
-                                // }
-
-                                delta_divU = 0.5*(delta_divU +
-                                                  out(r,s,t,n) * (delta_vol - Ueb_dot_n));
-
-                                // if ( i==20 && j==8){
-                                //     Print()<<"NU DELTA DIVU "<<delta_divU<<std::endl;
-                                // }
-
-                                // Account for flux into newly uncovered cell (needed for conservation)
-                                scratch(i,j,k,n) += Real(0.5) * dt * dUdt_in(r,s,t,n)
-                                    * vfrac_new(r,s,t)/vfrac_old(i,j,k);
+                        Vbar += vfrac_old(r,s,t);
+                        ubar(i,j,k,n) += vfrac_old(r,s,t)*U_in(r,s,t,n);
+                        // Vbar += alpha(i,j,k,1)*vfrac_old(r,s,t)/nrs(r,s,t);
+                        // ubar(i,j,k,n) += alpha(i,j,k,1)*vfrac_old(r,s,t)*U_in(r,s,t,n)/nrs(r,s,t);
+                        // Vbar += Real(1.);
+                        // ubar(i,j,k,n) += U_in(r,s,t,n);
                             }
 
-                            scratch(i,j,k,n) += dt*delta_divU/vfrac_old(i,j,k);
+                    if ( Vbar > 0. )
+                    {
+                        ubar(i,j,k,n) /= Vbar;
 
                             // if ((i==8 || i==9) && j==8)
                             // {
@@ -440,73 +429,19 @@ void Redistribution::Apply ( Box const& bx, int ncomp,
                             //            <<" "<<nrs(r,s,t)<<std::endl;
                             // }
                         }
-                    }
+
+                    //FIXME - just using my U^n is just as good as any of the averages I tried
+                    // for nbhd kappa. Averaged Ubar better if using U^n+1 based kappa.
+                    // better than using alpha, beta (for nbhd kappa, not looked at for U^n+1)...
+                    ubar(i,j,k,n) = 1.; //U_in(i,j,k,n);
                 }
                 else
                 {
                     scratch(i,j,k,n) = U_in(i,j,k,n) + dt * dUdt_in(i,j,k,n);
+                    kappa(i,j,k) = 0.;
+                    ubar(i,j,k,n) = 0.;
                 }
             });
-
-            // recall that now the NU cell doesn't take a neighbor, but rather puts itself in
-            // another cells neighborhood -- so we do this in above loop and don't need this one
-            // FIXME need to think about how big we really need this box to be
-            // amrex::ParallelFor(Box(scratch), ncomp,
-            // [=] AMREX_GPU_DEVICE (int i, int j, int k, int n) noexcept
-            // {
-            //     // Check to see if this cell was covered at time n.
-            //     // If covered, add my vol correction to the cells in my nbhd
-            //     // Need this in a separate loop because otherwise we can't be guaranteed
-            //     // that the nb has been initialized.
-            //     if ( vfrac_old(i,j,k) == 0.0 && vfrac_new(i,j,k) > 0.0 ) {
-            //        for (int i_nbor = 1; i_nbor <= itr(i,j,k,0); i_nbor++)
-            //        {
-            //             Print()<<Dim3{i,j,k}<<"itr "<<itr(i,j,k,1)<<std::endl;
-            //             int ioff = map[0][itr(i,j,k,i_nbor)];
-            //             int joff = map[1][itr(i,j,k,i_nbor)];
-            //             int koff = (AMREX_SPACEDIM < 3) ? 0 : map[2][itr(i,j,k,i_nbor)];
-
-            //             if ( Box(scratch).contains(Dim3{i+ioff,j+joff,k+koff}) )
-            //             {
-            //                 Real delta_vol = vfrac_new(i,j,k) / dt;
-            //                 Real delta_divU = delta_vol * U_in(i+ioff,j+joff,k+koff,n);
-
-            //                 if ( vel_eb_new) {
-            //                     Real Ueb_dot_n =
-            //                         AMREX_D_TERM(  vel_eb_new(i,j,k,0)*bnorm_new(i,j,k,0) * dxinv[0],
-            //                                      + vel_eb_new(i,j,k,1)*bnorm_new(i,j,k,1) * dxinv[1],
-            //                                      + vel_eb_new(i,j,k,2)*bnorm_new(i,j,k,2) * dxinv[2] );
-
-            //                     Ueb_dot_n *= barea_new(i,j,k);
-
-            //                     // if ( i==20 && j==8){
-            //                     //     Print()<<"NU DELTA VOL "<<delta_divU<<std::endl;
-            //                     // }
-
-            //                     delta_divU = 0.5*(delta_divU +
-            //                                       out(i,j,k,n) * (delta_vol - Ueb_dot_n));
-
-            //                     // if ( i==20 && j==8){
-            //                     //     Print()<<"NU DELTA DIVU "<<delta_divU<<std::endl;
-            //                     // }
-
-            //                     // Account for flux into newly uncovered cell (needed for conservation)
-            //                     scratch(i+ioff,j+joff,k+koff,n) += Real(0.5) * dt * dUdt_in(i,j,k,n)
-            //                         * vfrac_new(i,j,k)/vfrac_old(i+ioff,j+joff,k+koff);
-            //                 }
-
-            //                 scratch(i+ioff,j+joff,k+koff,n) += dt*delta_divU/vfrac_old(i+ioff,j+joff,k+koff);
-
-            //                            if ((i==8 || i==9) && j==8)
-            // {
-            //     Print()<<Dim3{i,j,k}<<"alpha, beta, N : "<<alpha(i,j,k,0)<<" "<<alpha(i,j,k,1)
-            //            <<" "<<nrs(i,j,k)<<std::endl;
-            // }
-
-            //             }
-            //         }
-            //     }
-            // });
         }
 
         //FIXME - For now, use the data in out, need to zero here
@@ -518,8 +453,8 @@ void Redistribution::Apply ( Box const& bx, int ncomp,
 
         StateRedistribute(bx, ncomp, out, scratch, flag_new, vfrac_old, vfrac_new,
                           AMREX_D_DECL(fcx, fcy, fcz), ccc,  d_bcrec_ptr,
-                          itr_const, nrs_const, alpha_const, nbhd_vol_const,
-                          cent_hat_const, lev_geom, srd_max_order);
+                          itr_const, nrs_const, alpha_const, nbhd_vol,
+                          cent_hat_const, kappa_const, ubar_const, lev_geom, srd_max_order);
 
         //
         // Only update the values which actually changed -- this makes
@@ -681,7 +616,8 @@ Redistribution::ApplyToInitialData ( Box const& bx, int ncomp,
 
     StateRedistribute(bx, ncomp, U_out, U_in, flag, vfrac_old, vfrac_new,
                       AMREX_D_DECL(fcx, fcy, fcz), ccc,  d_bcrec_ptr,
-                      itr_const, nrs_const, alpha_const, nbhd_vol_const,
-                      cent_hat_const, lev_geom, srd_max_order);
+                      itr_const, nrs_const, alpha_const, nbhd_vol,
+                      cent_hat_const, Array4<Real const>{}, Array4<Real const>{},
+                      lev_geom, srd_max_order);
 }
 /** @} */

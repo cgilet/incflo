@@ -120,8 +120,10 @@ namespace Redistribution {
                              amrex::Array4<int const> const& itracker,
                              amrex::Array4<amrex::Real const> const& nrs,
                              amrex::Array4<amrex::Real const> const& alpha,
-                             amrex::Array4<amrex::Real const> const& nbhd_vol,
+                             amrex::Array4<amrex::Real      > const& nbhd_vol,
                              amrex::Array4<amrex::Real const> const& cent_hat,
+                             amrex::Array4<amrex::Real const> const& kappa,
+                             amrex::Array4<amrex::Real const> const& ubar,
                              amrex::Geometry const& geom,
                              const int max_order = defaults::srd_max_order);
 
