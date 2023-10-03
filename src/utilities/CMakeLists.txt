@@ -3,4 +3,5 @@ target_sources(incflo
    incflo_build_info.cpp
    incflo_steady_state.cpp
    io.cpp
+   volWgtSum.H
    )
