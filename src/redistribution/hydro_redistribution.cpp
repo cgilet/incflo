@@ -352,8 +352,7 @@ void Redistribution::Apply ( Box const& bx, int ncomp,
 
                     // FIXME - need to think through NU case here
                     // For the Corrector step
-                    if (//!flag_new(i,j,k).isCovered() && std::abs(delta_vol) > eps &&
-                        vel_eb_new)
+                    if (vel_eb_new)
                     {
                         Real Ueb_dot_an_new =
                             AMREX_D_TERM(  vel_eb_new(i,j,k,0)*bnorm_new(i,j,k,0) * dxinv[0],
@@ -433,13 +432,13 @@ void Redistribution::Apply ( Box const& bx, int ncomp,
                     //FIXME - just using my U^n is just as good as any of the averages I tried
                     // for nbhd kappa. Averaged Ubar better if using U^n+1 based kappa.
                     // better than using alpha, beta (for nbhd kappa, not looked at for U^n+1)...
-                    ubar(i,j,k,n) = 1.; //U_in(i,j,k,n);
+                    //ubar(i,j,k,n) = 1.; //U_in(i,j,k,n);
                 }
                 else
                 {
                     scratch(i,j,k,n) = U_in(i,j,k,n) + dt * dUdt_in(i,j,k,n);
                     kappa(i,j,k) = 0.;
-                    ubar(i,j,k,n) = 0.;
+                    ubar(i,j,k,n) = U_in(i,j,k,n);
                 }
             });
         }
