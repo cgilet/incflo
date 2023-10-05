@@ -89,6 +89,7 @@ void incflo::Advance(Real orig_mass, Real& prev_mass, Real& prev_vol)
     Real vol = volWgtSum(my_lev,get_tracer_new_const()[my_lev],0,fact);
 #else
     Real sum = volWgtSum(my_lev,get_density_new_const()[my_lev],0);
+    Real vol = volWgtSum(my_lev,get_tracer_new_const()[my_lev],0);
 #endif
 
     auto const dx = geom[my_lev].CellSize();
