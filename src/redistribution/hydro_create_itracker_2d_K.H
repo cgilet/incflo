@@ -48,6 +48,7 @@ normalMerging ( int i, int j, int /*k*/,
                 Array4<Real const> const& apx,
                 Array4<Real const> const& apy,
                 Array4<Real const> const& vfrac,
+                Array4<Real const> const& vel_eb,
                 Array4<int> const& itracker,
                 Geometry const& geom,
                 Real target_volfrac,
@@ -57,7 +58,7 @@ normalMerging ( int i, int j, int /*k*/,
 {
     int debug_verbose = 0;
     //
-    // Choose based on EB normal.
+    // Choose based on EB vel & normal.
     //
     auto map = Redistribution::getCellMap();
     Array<int,9> imap = map[0];
@@ -79,20 +80,54 @@ normalMerging ( int i, int j, int /*k*/,
     bool nx_eq_ny = ( (std::abs(nx-ny) < small_norm_diff) ||
                       (std::abs(nx+ny) < small_norm_diff)  ) ? true : false;
 
-    // As a first pass, choose just based on the normal
-    if (std::abs(nx) > std::abs(ny))
-    {
-        if (nx > 0)
-            itracker(i,j,k,1) = 5;
-        else
-            itracker(i,j,k,1) = 4;
+    Real vx = vel_eb(i,j,k,0);
+    Real vy = vel_eb(i,j,k,1);
+    bool vx_eq_vy = ( (std::abs(vx-vy) < small_norm_diff) ||
+                      (std::abs(vx+vy) < small_norm_diff)  ) ? true : false;
 
-    } else {
-        if (ny > 0)
-            itracker(i,j,k,1) = 7;
+    // First, choose based on eb normal
+    // FIXME? perhaps want to choose base on EB vel first? Would have to think about
+    // trying to merge with covered or small cells though (eg when nx ~0)...
+    if ( !nx_eq_ny ) {
+        if ( std::abs(nx) > std::abs(ny) )
+        {
+            if (nx > 0) {
+                itracker(i,j,k,1) = 5; }
+            else {
+                itracker(i,j,k,1) = 4; }
+        }
         else
-            itracker(i,j,k,1) = 2;
+        {
+            if (ny > 0) {
+                itracker(i,j,k,1) = 7; }
+            else {
+                itracker(i,j,k,1) = 2; }
+        }
     }
+    else if ( !vx_eq_vy ) {
+        // Symmetry is broken and eb_vel determines whether we use x- or y-direction.
+        // Still want to merge in the direction of the EB normal.
+        if (std::abs(vx) > std::abs(vy))
+        {
+            if (nx > 0) {
+                itracker(i,j,k,1) = 5; }
+            else {
+                itracker(i,j,k,1) = 4; }
+        }
+        else
+        {
+            if (ny > 0) {
+                itracker(i,j,k,1) = 7; }
+            else {
+                itracker(i,j,k,1) = 2; }
+        }
+    }
+    else {
+        std::printf("cell (%i,%i) eb_vel %f, %f\neb_norm %f, %f\n", i, j, vx, vy, nx, ny);
+        Abort("normalMerging: Direction to merge not well resolved (overlapping nbhd problem)");
+        //std::printf("WARNING: Newly uncovered cell nbhd: Direction to merge not well resolved\n");
+    }
+
 
     bool xdir_mns_ok = (is_periodic_x || (i > domain.smallEnd(0)));
     bool xdir_pls_ok = (is_periodic_x || (i < domain.bigEnd(0)  ));
@@ -111,12 +146,25 @@ normalMerging ( int i, int j, int /*k*/,
         itracker(i,j,k,1) = (nx > 0) ? 5 : 4;
     }
 
-    // (i,j) merges with at least one cell now
-    itracker(i,j,k,0) += 1;
-
-    // (i+ioff,j+joff) is in the nbhd of (i,j)
     int ioff = imap[itracker(i,j,k,1)];
     int joff = jmap[itracker(i,j,k,1)];
+
+    // if ( vfrac(i,j,k) > 0. ) {
+        // (i,j) merges with at least one cell now
+        itracker(i,j,k,0) += 1;
+    // } else {
+        // Putting NC cells into neighbor's nbhd presents some chanllenges
+        // If NB doesn't have any other NBs, then beta_NB is undefined
+        // Have to treat Qhat_NC differently because Vhat is zero
+    //     // (i,j)  is in the nbhd of (i+ioff,j+joff)
+    //     if ( Box(itracker).contains(Dim3{i+ioff,j+joff,k}) )
+    //     {
+    //         // Now put (i,j,k) in the NB's neighborhood instead
+    //         itracker(i+ioff,j+joff,k,0) += 1;
+    //         int me = getInvCellMap()[itracker(i,j,k,1)];
+    //         itracker(i+ioff,j+joff,k,itracker(i+ioff,j+joff,k,0)) = me;
+    //     }
+    // }
 
     Real sum_vol = vfrac(i,j,k) + vfrac(i+ioff,j+joff,k);
 
@@ -127,8 +175,11 @@ normalMerging ( int i, int j, int /*k*/,
     //         " to get new vfrac " <<  sum_vol << std::endl;
 
     // If the merged cell isn't large enough, we try to merge in the other direction
-    if (sum_vol < target_volfrac || nx_eq_ny)
+    if (sum_vol < target_volfrac) // && vfrac(i,j,k) > 0. ) //was for NC nbhd like NU
     {
+        std::printf("cell (%i,%i) vfrac %f \n eb_vel %f, %f\neb_norm %f, %f\n", i, j, vfrac(i,j,k), vx, vy, nx, ny);
+        Abort("normalMerging: merged cell not large enough (overlapping nbhd problem)");
+
         // Original offset was in y-direction, so we will add to the x-direction
         // Note that if we can't because it would go outside the domain, we don't
         if (ioff == 0) {
@@ -175,9 +226,6 @@ normalMerging ( int i, int j, int /*k*/,
         }
     }
 
-    // FIXME - What if we couldn't claim the other dir due to a phys bndry?
-    // wouldn't we still want to try to take the corner?
-    //
     // Now we merge in the corner direction if we have already claimed two
     if (itracker(i,j,k,0) == 2)
     {
@@ -208,7 +256,7 @@ normalMerging ( int i, int j, int /*k*/,
         }
     }
 
-    if (sum_vol < target_volfrac)
+    if (sum_vol < target_volfrac) // && vfrac(i,j,k) > 0.) // was for NC nbhd like NU
     {
         std::printf("normalMerging(): Couldn't merge with enough cells to raise volume at "
                     "(%i,%i) so stuck with sum_vol %f\n", i, j, sum_vol);
@@ -294,26 +342,45 @@ newlyUncoveredNbhd ( int i, int j, int /*k*/,
     bool vx_eq_vy = ( (std::abs(vx-vy) < small_norm_diff) ||
                       (std::abs(vx+vy) < small_norm_diff)  ) ? true : false;
 
-    if ( vx_eq_vy && nx_eq_ny ){
-        std::printf("cell (%i,%i) eb_vel %f, %f\neb_norm %f, %f\n", i, j, vx, vy, nx, ny);
-        //Abort("Newly uncovered cell nbhd: Direction to merge not well resolved");
-        std::printf("WARNING: Newly uncovered cell nbhd: Direction to merge not well resolved\n");
+    // First, choose based on eb normal
+    if ( !nx_eq_ny ) {
+        if ( std::abs(nx) > std::abs(ny) )
+        {
+            if (nx > 0) {
+                itracker(i,j,k,1) = 5; }
+            else {
+                itracker(i,j,k,1) = 4; }
+        }
+        else
+        {
+            if (ny > 0) {
+                itracker(i,j,k,1) = 7; }
+            else {
+                itracker(i,j,k,1) = 2; }
+        }
     }
-
-    // Select first for EB motion. If that's indeterminate, choose based on EB normal
-    // if (std::abs(vx) > std::abs(vy) || ( vx_eq_vy &&
-    if ( std::abs(nx) > std::abs(ny) )
-    {
-        if (nx > 0)
-            itracker(i,j,k,1) = 5;
+    else if ( !vx_eq_vy ) {
+        // Symmetry is broken and eb_vel determines whether we use x- or y-direction.
+        // Still want to merge in the direction of the EB normal.
+        if (std::abs(vx) > std::abs(vy))
+        {
+            if (nx > 0) {
+                itracker(i,j,k,1) = 5; }
+            else {
+                itracker(i,j,k,1) = 4; }
+        }
         else
-            itracker(i,j,k,1) = 4;
-
-    } else {
-        if (ny > 0)
-            itracker(i,j,k,1) = 7;
-        else
-            itracker(i,j,k,1) = 2;
+        {
+            if (ny > 0) {
+                itracker(i,j,k,1) = 7; }
+            else {
+                itracker(i,j,k,1) = 2; }
+        }
+    }
+    else {
+        std::printf("cell (%i,%i) eb_vel %f, %f\neb_norm %f, %f\n", i, j, vx, vy, nx, ny);
+        Abort("newlyUncoveredMerging: Direction to merge not well resolved (overlapping nbhd problem)");
+        //std::printf("WARNING: Newly uncovered cell nbhd: Direction to merge not well resolved\n");
     }
 
     bool xdir_mns_ok = (is_periodic_x || (i > domain.smallEnd(0)));

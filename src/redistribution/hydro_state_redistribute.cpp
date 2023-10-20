@@ -110,6 +110,9 @@ Redistribution::StateRedistribute ( Box const& bx, int ncomp,
     FArrayBox    kappa_hat_fab (bxg3,ncomp,The_Async_Arena());
     Array4<Real> kappa_hat = kappa_hat_fab.array();
 
+    FArrayBox    kappa_out_fab (bxg3,ncomp,The_Async_Arena());
+    Array4<Real> kappa_out = kappa_out_fab.array();
+
     // Define Qhat (from Berger and Guliani) - the weighted solution average
     // Here we initialize soln_hat to equal U_in on all cells in bxg3 so that
     //      in the event we need to use soln_hat 3 cells out from the bx limits
@@ -121,6 +124,7 @@ Redistribution::StateRedistribute ( Box const& bx, int ncomp,
         for (int n = 0; n < ncomp; n++){
             soln_hat(i,j,k,n) = U_in(i,j,k,n);
             kappa_hat(i,j,k,n) = 0.;
+            kappa_out(i,j,k,n) = 0.;
         }
 
         if ( ( vfrac_new(i,j,k) > 0.0 || vfrac_old(i,j,k) > 0.0 )
@@ -150,9 +154,10 @@ Redistribution::StateRedistribute ( Box const& bx, int ncomp,
                 }
             }
             if (nbhd_vol(i,j,k) < 1e-14 &&
-                !(std::abs(alpha(i,j,k,0)) < 1e-14 && std::abs(alpha(i,j,k,1)) < 1e-14) )
+                !(std::abs(alpha(i,j,k,0)) < 1e-14 && std::abs(alpha(i,j,k,1)) < 1e-14) ) //&&
+                // vfrac_new(i,j,k) > 0. ) // Don't form NC nbhd like NU just yet
             {
-                std::printf("NBVOL (%i,%i,%i) %f\n", i, j, k, nbhd_vol(i,j,k));
+                std::printf("NBVOL (%i,%i,%i) %f %f\n", i, j, k, nbhd_vol(i,j,k), vfrac_new(i,j,k));
                 Abort();
             }
             for (int n = 0; n < ncomp; n++)  {
@@ -243,8 +248,10 @@ Redistribution::StateRedistribute ( Box const& bx, int ncomp,
                 if (bx.contains(IntVect(AMREX_D_DECL(i,j,k))))
                 {
                     for (int n = 0; n < ncomp; n++) {
-                        amrex::Gpu::Atomic::Add(&U_out(i,j,k,n),alpha_meb(i,j,k,n)*nrs(i,j,k)*
-                                                (soln_hat(i,j,k,n) + kappa_hat(i,j,k,n)*ubar(i,j,k,n)));
+                        // amrex::Gpu::Atomic::Add(&U_out(i,j,k,n),alpha_meb(i,j,k,n)*nrs(i,j,k)*
+                        //                         (soln_hat(i,j,k,n) + kappa_hat(i,j,k,n)*ubar(i,j,k,n)));
+                        amrex::Gpu::Atomic::Add(&U_out(i,j,k,n),alpha_meb(i,j,k,n)*nrs(i,j,k)*soln_hat(i,j,k,n));
+                        amrex::Gpu::Atomic::Add(&kappa_out(i,j,k,n),alpha_meb(i,j,k,n)*nrs(i,j,k)*kappa_hat(i,j,k,n));
                     }
                 }
             }
@@ -365,8 +372,10 @@ Redistribution::StateRedistribute ( Box const& bx, int ncomp,
                         AMREX_D_TERM(update += lim_slope[0] * (ccent(i,j,k,0)-cent_hat(i,j,k,0));,
                                      update += lim_slope[1] * (ccent(i,j,k,1)-cent_hat(i,j,k,1));,
                                      update += lim_slope[2] * (ccent(i,j,k,2)-cent_hat(i,j,k,2)););
-                        amrex::Gpu::Atomic::Add(&U_out(i,j,k,n),alpha_meb(i,j,k,n)*nrs(i,j,k)*
-                                                (update + kappa_hat(i,j,k,n)*ubar(i,j,k,n)));
+                        // amrex::Gpu::Atomic::Add(&U_out(i,j,k,n),alpha_meb(i,j,k,n)*nrs(i,j,k)*
+                        //                         (update + kappa_hat(i,j,k,n)*ubar(i,j,k,n)));
+                        amrex::Gpu::Atomic::Add(&U_out(i,j,k,n),alpha_meb(i,j,k,n)*nrs(i,j,k)*update);
+                        amrex::Gpu::Atomic::Add(&kappa_out(i,j,k,n),alpha_meb(i,j,k,n)*nrs(i,j,k)*kappa_hat(i,j,k,n));
                     } // if bx contains
 
                     // This loops over the neighbors of (i,j,k), and doesn't include (i,j,k) itself
@@ -382,10 +391,10 @@ Redistribution::StateRedistribute ( Box const& bx, int ncomp,
                             AMREX_D_TERM(update += lim_slope[0] * (ccent(r,s,t,0)-cent_hat(i,j,k,0) + static_cast<Real>(r-i));,
                                          update += lim_slope[1] * (ccent(r,s,t,1)-cent_hat(i,j,k,1) + static_cast<Real>(s-j));,
                                          update += lim_slope[2] * (ccent(r,s,t,2)-cent_hat(i,j,k,2) + static_cast<Real>(t-k)););
-                            amrex::Gpu::Atomic::Add(&U_out(r,s,t,n),beta_meb(i,j,k,n)*
-                                                    (update + kappa_hat(i,j,k,n)*ubar(r,s,t,n)));
-
-
+                            // amrex::Gpu::Atomic::Add(&U_out(r,s,t,n),beta_meb(i,j,k,n)*
+                            //                         (update + kappa_hat(i,j,k,n)*ubar(r,s,t,n)));
+                            amrex::Gpu::Atomic::Add(&U_out(r,s,t,n),beta_meb(i,j,k,n)*update);
+                            amrex::Gpu::Atomic::Add(&kappa_out(r,s,t,n),beta_meb(i,j,k,n)*kappa_hat(i,j,k,n));
                         } // if bx contains
                     } // i_nbor
                 } // n
@@ -400,6 +409,7 @@ Redistribution::StateRedistribute ( Box const& bx, int ncomp,
         {
             // This seems to help with a compiler issue ...
             Real denom = 1. / (nrs(i,j,k) + 1.e-40);
+            U_out(i,j,k,n) += kappa_out(i,j,k,n)*ubar(i,j,k,n);
             U_out(i,j,k,n) *= denom;
         }
         else

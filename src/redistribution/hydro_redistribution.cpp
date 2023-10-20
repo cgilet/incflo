@@ -223,6 +223,7 @@ void Redistribution::Apply ( Box const& bx, int ncomp,
         // Also keep the state in the MEB correction term separate for same reason
         FArrayBox kappa_fab(bxg3,1,The_Async_Arena());
         FArrayBox ubar_fab(bxg3,ncomp,The_Async_Arena());
+        FArrayBox Vbar_fab(bxg3,1,The_Async_Arena());
 
         Array4<int> itr = itracker.array();
         Array4<int const> itr_const = itracker.const_array();
@@ -244,6 +245,9 @@ void Redistribution::Apply ( Box const& bx, int ncomp,
 
         Array4<Real      > ubar       = ubar_fab.array();
         Array4<Real const> ubar_const = ubar_fab.const_array();
+
+        Array4<Real      > Vbar       = Vbar_fab.array();
+        Array4<Real const> Vbar_const = Vbar_fab.const_array();
 
         Box domain_per_grown = lev_geom.Domain();
         AMREX_D_TERM(if (lev_geom.isPeriodic(0)) domain_per_grown.grow(0,1);,
@@ -269,7 +273,7 @@ void Redistribution::Apply ( Box const& bx, int ncomp,
         // FIXME - think about if this still needs v_eb and whether old or new...
         MakeITracker(bx, AMREX_D_DECL(apx_old, apy_old, apz_old), vfrac_old,
                          AMREX_D_DECL(apx_new, apy_new, apz_new), vfrac_new,
-                     itr, lev_geom, target_volfrac, vel_eb_new);
+                     itr, lev_geom, target_volfrac, vel_eb_old);
 
 
         MakeStateRedistUtils(bx, vfrac_old, vfrac_new, ccc, itr, nrs, alpha, nbhd_vol, cent_hat,
@@ -318,6 +322,22 @@ void Redistribution::Apply ( Box const& bx, int ncomp,
             AMREX_ALWAYS_ASSERT(!srd_update_scale);
 
             Real eps = 1.e-14;
+
+            // Initialize Ubar ...
+            // FIXME? perhaps this fits better in state_utils
+            amrex::ParallelFor(Box(scratch),
+            [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept
+            {
+                Vbar(i,j,k) = vfrac_old(i,j,k);
+                // Real Vbar = alpha(i,j,k,0)*vfrac_old(i,j,k);
+                // Real Vbar = Real(1.0);
+
+                for ( int n = 0; n < ncomp; n++){
+                    ubar(i,j,k,n) = vfrac_old(i,j,k)*U_in(i,j,k,n);
+                    // ubar(i,j,k,n) = alpha(i,j,k,0)*vfrac_old(i,j,k)*U_in(i,j,k,n);
+                    // ubar(i,j,k,n) = U_in(i,j,k,n);
+                }
+            });
 
             amrex::ParallelFor(Box(scratch), ncomp,
             [=] AMREX_GPU_DEVICE (int i, int j, int k, int n) noexcept
@@ -397,49 +417,62 @@ void Redistribution::Apply ( Box const& bx, int ncomp,
                     scratch(i,j,k,n) = U_in(i,j,k,n) + dt * dUdt_in(i,j,k,n);
                     kappa(i,j,k) = dt * delta_divU;
 
-                    // Now compute my nbhd Ubar
-                    Real Vbar = vfrac_old(i,j,k);
-                    ubar(i,j,k,n) = vfrac_old(i,j,k)*U_in(i,j,k,n);
-                    // Real Vbar = alpha(i,j,k,0)*vfrac_old(i,j,k);
-                    // ubar(i,j,k,n) = alpha(i,j,k,0)*vfrac_old(i,j,k)*U_in(i,j,k,n);
-                    // Real Vbar = Real(1.0);
-                    // ubar(i,j,k,n) = U_in(i,j,k,n);
+                    // Now add to Ubar
                     for (int i_nbor = 1; i_nbor <= itr(i,j,k,0); i_nbor++)
                     {
                         int r = i+map[0][itr(i,j,k,i_nbor)];
                         int s = j+map[1][itr(i,j,k,i_nbor)];
                         int t = k+((AMREX_SPACEDIM < 3) ? 0 : map[2][itr(i,j,k,i_nbor)]);
 
-                        Vbar += vfrac_old(r,s,t);
-                        ubar(i,j,k,n) += vfrac_old(r,s,t)*U_in(r,s,t,n);
-                        // Vbar += alpha(i,j,k,1)*vfrac_old(r,s,t)/nrs(r,s,t);
-                        // ubar(i,j,k,n) += alpha(i,j,k,1)*vfrac_old(r,s,t)*U_in(r,s,t,n)/nrs(r,s,t);
-                        // Vbar += Real(1.);
-                        // ubar(i,j,k,n) += U_in(r,s,t,n);
-                            }
-
-                    if ( Vbar > 0. )
-                    {
-                        ubar(i,j,k,n) /= Vbar;
-
-                            // if ((i==8 || i==9) && j==8)
-                            // {
-                            //     Print()<<Dim3{r,s,t}<<"alpha, beta, N : "<<alpha(r,s,t,0)<<" "<<alpha(r,s,t,1)
-                            //            <<" "<<nrs(r,s,t)<<std::endl;
-                            // }
+                        // Add to my Ubar
+                        // Now add me to my nbs Ubars
+                        // FIXME - does this double weight if nbhds reciprocal?
+                        if ( n == 0 ){
+                            Vbar(i,j,k) += vfrac_old(r,s,t);
+                            Vbar(r,s,t) += vfrac_old(i,j,k);
                         }
 
-                    //FIXME - just using my U^n is just as good as any of the averages I tried
-                    // for nbhd kappa. Averaged Ubar better if using U^n+1 based kappa.
-                    // better than using alpha, beta (for nbhd kappa, not looked at for U^n+1)...
-                    //ubar(i,j,k,n) = 1.; //U_in(i,j,k,n);
+// already doing n with ParallelFor
+                        //for ( int n = 0; n < ncomp; n++){
+                            ubar(i,j,k,n) += vfrac_old(r,s,t)*U_in(r,s,t,n);
+                            ubar(r,s,t,n) += vfrac_old(i,j,k)*U_in(i,j,k,n);
+                            // Vbar += alpha(i,j,k,1)*vfrac_old(r,s,t)/nrs(r,s,t);
+                            // ubar(i,j,k,n) += alpha(i,j,k,1)*vfrac_old(r,s,t)*U_in(r,s,t,n)/nrs(r,s,t);
+                            // Vbar += Real(1.);
+                            // ubar(i,j,k,n) += U_in(r,s,t,n);
+                            //}
+                    }
                 }
                 else
                 {
                     scratch(i,j,k,n) = U_in(i,j,k,n) + dt * dUdt_in(i,j,k,n);
                     kappa(i,j,k) = 0.;
-                    ubar(i,j,k,n) = U_in(i,j,k,n);
+                    // Already initialized now: ubar(i,j,k,n) = U_in(i,j,k,n);
                 }
+            });
+
+            // Finish Ubar
+            // FIXME? perhaps this fits better in state_utils
+            amrex::ParallelFor(Box(scratch),
+            [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept
+            {
+                    for (int n = 0; n < ncomp; n++){
+                if ( Vbar(i,j,k) > 0. )
+                {
+                        ubar(i,j,k,n) /= Vbar(i,j,k);
+                }
+                        // if ((i==8 || i==9) && j==8)
+                        // {
+                        //     Print()<<Dim3{r,s,t}<<"alpha, beta, N : "<<alpha(r,s,t,0)<<" "<<alpha(r,s,t,1)
+                        //            <<" "<<nrs(r,s,t)<<std::endl;
+                        // }
+
+                        //FIXME - just using my U^n is just as good as any of the averages I tried
+                        // for nbhd kappa. Averaged Ubar better if using U^n+1 based kappa.
+                        // better than using alpha, beta (for nbhd kappa, not looked at for U^n+1)...
+                //ubar(i,j,k,n) = Real(2.); //U_in(i,j,k,n);
+                    }
+                    //}
             });
         }
 
@@ -519,7 +552,7 @@ void Redistribution::Apply ( Box const& bx, int ncomp,
                     // Only need to reset cells that didn't get SRD changes
                     out(i,j,k,n) = U_in(i,j,k,n) + dt * dUdt_in(i,j,k,n);
                 }
-        });
+            });
         }
     } else if (redistribution_type == "NoRedist") {
         Print()<<"No redistribution..."<<std::endl;

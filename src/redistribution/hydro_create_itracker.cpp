@@ -167,7 +167,7 @@ Redistribution::MakeITracker ( Box const& bx,
         {
             normalMerging(i, j, k,
                           AMREX_D_DECL(apx_new, apy_new, apz_new),
-                          vfrac_new, itracker,
+                          vfrac_new, vel_eb, itracker,
                           lev_geom, target_volfrac, domain,
                           AMREX_D_DECL(is_periodic_x, is_periodic_y, is_periodic_z));
         }
@@ -201,7 +201,7 @@ Redistribution::MakeITracker ( Box const& bx,
             // target_volfrac
             normalMerging(i, j, k,
                           AMREX_D_DECL(apx_old, apy_old, apz_old),
-                          vfrac_new, itracker,
+                          vfrac_new, vel_eb, itracker,
                           lev_geom, target_volfrac, domain,
                           AMREX_D_DECL(is_periodic_x, is_periodic_y, is_periodic_z));
         }
@@ -235,6 +235,22 @@ Redistribution::MakeITracker ( Box const& bx,
             //               lev_geom, target_volfrac, domain,
             //               AMREX_D_DECL(is_periodic_x, is_periodic_y, is_periodic_z));
         }
+        // Putting NC cells into neighbor's nbhd presents some chanllenges
+        // If NB doesn't have any other NBs, then beta_NB is undefined
+        // Have to treat Qhat_NC differently because Vhat is zero
+        // else if ( vfrac_old(i,j,k) > 0.0 && vfrac_new(i,j,k) == 0.0)
+        // {
+        //     // Create a nbhd for cells that become covered...
+        //     // vfrac is only for checking volume of nbhd
+        //     // Probably don't need target_volfrac to match with general case,
+        //     // FIXME? This could result in a NC cell including other NC cells in nbhd depending
+        //     // target_volfrac
+        //     normalMerging(i, j, k,
+        //                   AMREX_D_DECL(apx_old, apy_old, apz_old),
+        //                   vfrac_new, vel_eb, itracker,
+        //                   lev_geom, target_volfrac, domain,
+        //                   AMREX_D_DECL(is_periodic_x, is_periodic_y, is_periodic_z));
+        // }
     });
 
     // // For Newly Uncovered cells, make my neighbor's neighors my own neighbors
