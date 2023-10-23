@@ -152,7 +152,12 @@ incflo::redistribute_term ( MFIter const& mfi,
         amrex::ParallelFor(bx, ncomp,
         [=] AMREX_GPU_DEVICE (int i, int j, int k, int n) noexcept
         {
-            result(i,j,k,n) = temporary(i,j,k,n);
+            if (!vel_eb_old) {
+                result(i,j,k,n) = temporary(i,j,k,n);
+            }
+            else {
+                result(i,j,k,n) = state(i,j,k,n) + dt * temporary(i,j,k,n);
+            }
         });
     }
 }
