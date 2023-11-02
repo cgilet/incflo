@@ -175,54 +175,58 @@ normalMerging ( int i, int j, int /*k*/,
     //         " to get new vfrac " <<  sum_vol << std::endl;
 
     // If the merged cell isn't large enough, we try to merge in the other direction
-    if (sum_vol < target_volfrac) // && vfrac(i,j,k) > 0. ) //was for NC nbhd like NU
+    if (sum_vol < target_volfrac )
     {
-        std::printf("cell (%i,%i) vfrac %f \n eb_vel %f, %f\neb_norm %f, %f\n", i, j, vfrac(i,j,k), vx, vy, nx, ny);
-        Abort("normalMerging: merged cell not large enough (overlapping nbhd problem)");
+        if ( vfrac(i,j,k) > 0. ) {
+            std::printf("cell (%i,%i) vfracs %f %f \n eb_vel %f, %f\neb_norm %f, %f\n", i, j, vfrac(i,j,k), vfrac(i+ioff,j+joff,k), vx, vy, nx, ny);
+            Warning("normalMerging: merged cell not large enough try other direction");
 
-        // Original offset was in y-direction, so we will add to the x-direction
-        // Note that if we can't because it would go outside the domain, we don't
-        if (ioff == 0) {
-            if (nx >= 0 && xdir_pls_ok)
-            {
-                itracker(i,j,k,2) = 5;
-                itracker(i,j,k,0) += 1;
-            }
-            else if (nx <= 0 && xdir_mns_ok)
-            {
-                itracker(i,j,k,2) = 4;
-                itracker(i,j,k,0) += 1;
-            }
-
-            // Original offset was in x-direction, so we will add to the y-direction
+            // This can cause problems for NC cells. Need a check to make sure we don't
+            // try to merge with another NC cell..
+            // Original offset was in y-direction, so we will add to the x-direction
             // Note that if we can't because it would go outside the domain, we don't
-        } else {
-            if (ny >= 0 && ydir_pls_ok)
-            {
-                itracker(i,j,k,2) = 7;
-                itracker(i,j,k,0) += 1;
+            if (ioff == 0) {
+                if (nx >= 0 && xdir_pls_ok)
+                {
+                    itracker(i,j,k,1) = 5;
+                }
+                else if (nx <= 0 && xdir_mns_ok)
+                {
+                    itracker(i,j,k,1) = 4;
+                }
+
+                // Original offset was in x-direction, so we will add to the y-direction
+                // Note that if we can't because it would go outside the domain, we don't
+            } else {
+                if (ny >= 0 && ydir_pls_ok)
+                {
+                    itracker(i,j,k,1) = 7;
+                }
+                else if (ny <= 0 && ydir_mns_ok)
+                {
+                    itracker(i,j,k,1) = 2;
+                }
             }
-            else if (ny <= 0 && ydir_mns_ok)
+
+            // (i+ioff2,j+joff2) is in the nbhd of (i,j)
+            int ioff2 = imap[itracker(i,j,k,1)];
+            int joff2 = jmap[itracker(i,j,k,1)];
+
+            sum_vol = vfrac(i,j,k) + vfrac(i+ioff2,j+joff2,k);
+
+            if (sum_vol < target_volfrac )
             {
-                itracker(i,j,k,2) = 2;
-                itracker(i,j,k,0) += 1;
+                std::printf("cell (%i,%i) vfracs %f %f \n eb_vel %f, %f\neb_norm %f, %f\n", i, j, vfrac(i,j,k), vfrac(i+ioff2,j+joff2,k), vx, vy, nx, ny);
+                Abort("normalMerging: merged cell not large enough (overlapping nbhd problem)");
+                // std::printf("Cell (%i,%i) with volfrac %.15f trying to ALSO1 merge with (%i,%i) "
+                //             "with volfrac %.15f to get new sum_vol %.15f\n",
+                //             i, j, vfrac(i,j,k), i+ioff2, j+joff2, vfrac(i+ioff2,j+joff2,k), sum_vol);
             }
         }
-
-        if (itracker(i,j,k,0) > 1)
+        else // Newly covered cell
         {
-            // (i+ioff2,j+joff2) is in the nbhd of (i,j)
-            int ioff2 = imap[itracker(i,j,k,2)];
-            int joff2 = jmap[itracker(i,j,k,2)];
-
-            sum_vol += vfrac(i+ioff2,j+joff2,k);
-
-            if (debug_verbose > 0 )
-            {
-                std::printf("Cell (%i,%i) with volfrac %.15f trying to ALSO1 merge with (%i,%i) "
-                            "with volfrac %.15f to get new sum_vol %.15f\n",
-                            i, j, vfrac(i,j,k), i+ioff2, j+joff2, vfrac(i+ioff2,j+joff2,k), sum_vol);
-            }
+            std::printf("cell (%i,%i) vfracs %f %f \n eb_vel %f, %f\neb_norm %f, %f\n", i, j, vfrac(i,j,k), vfrac(i+ioff,j+joff,k), vx, vy, nx, ny);
+            Warning("normalMerging: Newly Covered merged cell not large enough. Let this ride since it will be covered, and nb will have to take it's own nb.");
         }
     }
 
@@ -256,11 +260,11 @@ normalMerging ( int i, int j, int /*k*/,
         }
     }
 
-    if (sum_vol < target_volfrac) // && vfrac(i,j,k) > 0.) // was for NC nbhd like NU
+    if (sum_vol < target_volfrac && vfrac(i,j,k) > 0.) // was for NC nbhd like NU
     {
         std::printf("normalMerging(): Couldn't merge with enough cells to raise volume at "
                     "(%i,%i) so stuck with sum_vol %f\n", i, j, sum_vol);
-        amrex::Warning("Couldn't merge with enough cells to raise volume greater than target_volfrac");
+        //amrex::Warning("Couldn't merge with enough cells to raise volume greater than target_volfrac");
 // FIXME -- need this to get plane_right to work (has wall BC), but 0.5 is likely a better choice here
         // or using target_volume...
         if (sum_vol < Real(0.4))
