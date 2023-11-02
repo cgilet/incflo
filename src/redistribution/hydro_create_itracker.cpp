@@ -317,7 +317,7 @@ Redistribution::MakeITracker ( Box const& bx,
 //         }
 //     });
 
-#if 1
+#if 0
 
     amrex::ParallelFor(Box(itracker),
     [=] AMREX_GPU_DEVICE (int ii, int jj, int kk) noexcept
@@ -398,7 +398,7 @@ Redistribution::MakeITracker ( Box const& bx,
     amrex::Print() << std::endl;
 #endif
 
-#if 1
+#if 0
     amrex::Print() << "Post Update to Cell Merging" << std::endl;
 
     amrex::ParallelFor(Box(itracker),
