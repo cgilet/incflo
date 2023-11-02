@@ -103,15 +103,17 @@ void incflo::Advance(Real orig_mass, Real& prev_mass, Real& prev_vol)
 
     amrex::Print() << "Pred:Change in domain volume  " << (vol - prev_vol) << std::endl;
     // For plane geoms:
-    amrex::Print() << "Pred:Change in domain mass   " << (sum - prev_mass) << std::endl;
-    amrex::Print() << "Pred:Change error   " << (sum - prev_mass - vol + prev_vol)/ (vol-prev_vol) << std::endl;
-    amrex::Print() << "Pred:Change over time in last time step divided by time and area " << (sum - prev_mass) / m_dt / 1.6 <<
-                      " using " << sum << " " << prev_mass << " " << m_dt << std::endl;
+    // amrex::Print() << "Pred:Change in domain mass   " << (sum - (prev_mass - 1.*dx[1]*16*m_dt*2.)) << std::endl;
+    // amrex::Print() << "Pred:Change speed   " << (sum - prev_mass) / (1.* dx[1]*16 *m_dt) << std::endl;
+    // amrex::Print() << "Pred:Change error   " << (sum - prev_mass - vol + prev_vol)/ (vol-prev_vol) << std::endl;
+    // amrex::Print() << "Pred:Change over time in last time step divided by time and area " << (sum - prev_mass) / m_dt / 1.6 <<
+    //                   " using " << sum << " " << prev_mass << " " << m_dt << std::endl;
 
-    // For cyl/sphere :
-    // amrex::Print() << "Pred:Change in domain mass 2D " << (sum - prev_mass - (2.45*.1*.001*16 - .1*.001*16) ) << std::endl;
-    // amrex::Print() << "Pred:Change error   " << (sum - prev_mass - (2.45*.1*.001*16 - .1*.001*16) - 1.*(vol - prev_vol))/ (1.*(vol-prev_vol)) << std::endl;
-    //amrex::Print() << "Pred:Change in domain mass 3D" << (sum - prev_mass - (0.1*.1*.001*16*16 - 0.1*.1*.001*16) ) << std::endl;
+    // For cyl :
+    amrex::Print() << "Pred:Change in domain mass 2D " << (sum - (prev_mass + (2.45-1.)*dx[1]*64*m_dt*1.)) << std::endl;
+    amrex::Print() << "Pred:Change speed   " << (sum - prev_mass - (vol-prev_vol)*(2.45+1.625)/2.) / ((2.45-1.)* dx[1]*64 *m_dt) << std::endl;
+    // For sphere :
+    // amrex::Print() << "Pred:Change in domain mass 3D " << (sum - prev_mass - (0.1*.1*.001*16*16 - 0.1*.1*.001*16) ) << std::endl;
     // amrex::Print() << "Pred:Sum of mass at time = " << m_cur_time+m_dt << " " << sum << " " << std::endl;
 
 #endif
