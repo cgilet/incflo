@@ -328,14 +328,25 @@ void Redistribution::Apply ( Box const& bx, int ncomp,
             amrex::ParallelFor(Box(scratch),
             [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept
             {
-                Vbar(i,j,k) = vfrac_old(i,j,k);
-                // Real Vbar = alpha(i,j,k,0)*vfrac_old(i,j,k);
-                // Real Vbar = Real(1.0);
+                // Only include cells that have EB
+                if (vfrac_old(i,j,k) < 1.0 || vfrac_new(i,j,k) < 1.0)
+                {
+                    Vbar(i,j,k) = vfrac_old(i,j,k);
+                    //Vbar(i,j,k) = alpha(i,j,k,0)*vfrac_old(i,j,k);
+                    // Real Vbar = Real(1.0);
 
-                for ( int n = 0; n < ncomp; n++){
-                    ubar(i,j,k,n) = vfrac_old(i,j,k)*U_in(i,j,k,n);
-                    // ubar(i,j,k,n) = alpha(i,j,k,0)*vfrac_old(i,j,k)*U_in(i,j,k,n);
-                    // ubar(i,j,k,n) = U_in(i,j,k,n);
+                    for ( int n = 0; n < ncomp; n++){
+                        ubar(i,j,k,n) = vfrac_old(i,j,k)*U_in(i,j,k,n);
+                        //ubar(i,j,k,n) = alpha(i,j,k,0)*vfrac_old(i,j,k)*U_in(i,j,k,n);
+                        // ubar(i,j,k,n) = U_in(i,j,k,n);
+                    }
+                }
+                else
+                {
+                    Vbar(i,j,k) = 0.;
+                    for ( int n = 0; n < ncomp; n++){
+                        ubar(i,j,k,n) = 0.;
+                    }
                 }
             });
 
@@ -370,7 +381,8 @@ void Redistribution::Apply ( Box const& bx, int ncomp,
                         delta_divU = (delta_vol - Ueb_dot_an); //* U_in(i,j,k,n);
                     }
 
-                    // FIXME - need to think through NU case here
+                    // FIXME - need to think through NU case here. How to handle NU advective flux
+                    // and kappa, as both were just added to NB before...
                     // For the Corrector step
                     if (vel_eb_new)
                     {
@@ -417,30 +429,33 @@ void Redistribution::Apply ( Box const& bx, int ncomp,
                     scratch(i,j,k,n) = U_in(i,j,k,n) + dt * dUdt_in(i,j,k,n);
                     kappa(i,j,k) = dt * delta_divU;
 
-                    // Now add to Ubar
-                    for (int i_nbor = 1; i_nbor <= itr(i,j,k,0); i_nbor++)
+                    // Now add to Ubar if cell has EB
+                    if (vfrac_old(i,j,k) < 1.0 || vfrac_new(i,j,k) < 1.0)
                     {
-                        int r = i+map[0][itr(i,j,k,i_nbor)];
-                        int s = j+map[1][itr(i,j,k,i_nbor)];
-                        int t = k+((AMREX_SPACEDIM < 3) ? 0 : map[2][itr(i,j,k,i_nbor)]);
+                        for (int i_nbor = 1; i_nbor <= itr(i,j,k,0); i_nbor++)
+                        {
+                            int r = i+map[0][itr(i,j,k,i_nbor)];
+                            int s = j+map[1][itr(i,j,k,i_nbor)];
+                            int t = k+((AMREX_SPACEDIM < 3) ? 0 : map[2][itr(i,j,k,i_nbor)]);
 
-                        // Add to my Ubar
-                        // Now add me to my nbs Ubars
-                        // FIXME - does this double weight if nbhds reciprocal?
-                        if ( n == 0 ){
-                            Vbar(i,j,k) += vfrac_old(r,s,t);
-                            Vbar(r,s,t) += vfrac_old(i,j,k);
-                        }
+                            // Add to my Ubar
+                            // Now add me to my nbs Ubars
+                            // FIXME - does this double weight if nbhds reciprocal?
+                            if ( n == 0 ){
+                                Vbar(i,j,k) += vfrac_old(r,s,t);
+                                Vbar(r,s,t) += vfrac_old(i,j,k);
+                                // Vbar(i,j,k) += alpha(i,j,k,1)*vfrac_old(r,s,t)/nrs(r,s,t);
+                            }
 
 // already doing n with ParallelFor
-                        //for ( int n = 0; n < ncomp; n++){
+                            //for ( int n = 0; n < ncomp; n++){
                             ubar(i,j,k,n) += vfrac_old(r,s,t)*U_in(r,s,t,n);
                             ubar(r,s,t,n) += vfrac_old(i,j,k)*U_in(i,j,k,n);
-                            // Vbar += alpha(i,j,k,1)*vfrac_old(r,s,t)/nrs(r,s,t);
                             // ubar(i,j,k,n) += alpha(i,j,k,1)*vfrac_old(r,s,t)*U_in(r,s,t,n)/nrs(r,s,t);
                             // Vbar += Real(1.);
                             // ubar(i,j,k,n) += U_in(r,s,t,n);
                             //}
+                        }
                     }
                 }
                 else
@@ -456,11 +471,11 @@ void Redistribution::Apply ( Box const& bx, int ncomp,
             amrex::ParallelFor(Box(scratch),
             [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept
             {
-                    for (int n = 0; n < ncomp; n++){
-                if ( Vbar(i,j,k) > 0. )
-                {
+                for (int n = 0; n < ncomp; n++){
+                    if ( Vbar(i,j,k) > 0. )
+                    {
                         ubar(i,j,k,n) /= Vbar(i,j,k);
-                }
+                    }
                         // if ((i==8 || i==9) && j==8)
                         // {
                         //     Print()<<Dim3{r,s,t}<<"alpha, beta, N : "<<alpha(r,s,t,0)<<" "<<alpha(r,s,t,1)
@@ -471,8 +486,8 @@ void Redistribution::Apply ( Box const& bx, int ncomp,
                         // for nbhd kappa. Averaged Ubar better if using U^n+1 based kappa.
                         // better than using alpha, beta (for nbhd kappa, not looked at for U^n+1)...
                 //ubar(i,j,k,n) = Real(2.); //U_in(i,j,k,n);
-                    }
                     //}
+                }
             });
         }
 
