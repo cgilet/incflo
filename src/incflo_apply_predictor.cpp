@@ -310,7 +310,7 @@ void incflo::ApplyPredictor (bool incremental_projection)
             //
             redistribute_term(ld.density, ld.conv_density_o, ld.density_o,
                               get_density_bcrec_device_ptr(), lev,
-                              get_velocity_eb()[lev]);
+                              get_velocity_eb(m_cur_time)[lev]);
 #else
             //
             // Add advective update that's already been redistributed to get rho^(n+1)
@@ -824,7 +824,7 @@ void incflo::ApplyPredictor (bool incremental_projection)
     // VisMF::Write(m_leveldata[0]->density,"dens");
     // // VisMF::Write(density_nph_neweb[0],"rnph");
     // VisMF::Write(m_leveldata[0]->velocity,"vel");
-
+    // VisMF::Write(*get_velocity_eb(new_time)[0],"veb");
     // std::string save = m_plot_file;
     // m_plot_file = "pred";
     // WritePlotFile();
@@ -847,6 +847,10 @@ void incflo::ApplyPredictor (bool incremental_projection)
 #endif
 
 #ifdef AMREX_USE_EB
+#ifndef AMREX_USE_MOVING_EB
+    // Don't do this for moving EB. It contributes to breaking conservation, and can introduce non-zero
+    // vel into a direction that should stay zero
+
     // **********************************************************************************************
     //
     // Over-write velocity in cells with vfrac < 1e-4
@@ -856,6 +860,7 @@ void incflo::ApplyPredictor (bool incremental_projection)
         incflo_correct_small_cells(get_velocity_new(),
                                    AMREX_D_DECL(GetVecOfConstPtrs(u_mac), GetVecOfConstPtrs(v_mac),
                                    GetVecOfConstPtrs(w_mac)));
+#endif
 #endif
 
     // static int count = 0;

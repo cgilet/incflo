@@ -818,14 +818,19 @@ void incflo::ApplyCorrector()
     ApplyProjection(GetVecOfConstPtrs(density_nph), new_time,m_dt,incremental_projection);
 
 #ifdef AMREX_USE_EB
+#ifndef AMREX_USE_MOVING_EB
+    // Don't do this for moving EB. It contributes to breaking conservation, and can introduce non-zero
+    // vel into a direction that should stay zero
+
     // **********************************************************************************************
     //
     // Over-write velocity in cells with vfrac < 1e-4
     //
     // **********************************************************************************************
-    //incflo_correct_small_cells(get_velocity_new(),
-    //                           AMREX_D_DECL(GetVecOfConstPtrs(u_mac), GetVecOfConstPtrs(v_mac),
-    //                           GetVecOfConstPtrs(w_mac)));
+    incflo_correct_small_cells(get_velocity_new(),
+                              AMREX_D_DECL(GetVecOfConstPtrs(u_mac), GetVecOfConstPtrs(v_mac),
+                              GetVecOfConstPtrs(w_mac)));
+#endif
 #endif
 
     amrex::Print() << "\n ******  End Corrector *********** \n" << std::endl;
