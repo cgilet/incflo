@@ -334,11 +334,18 @@ void Redistribution::Apply ( Box const& bx, int ncomp,
                     Vbar(i,j,k) = vfrac_old(i,j,k);
                     //Vbar(i,j,k) = alpha(i,j,k,0)*vfrac_old(i,j,k);
                     // Real Vbar = Real(1.0);
+                    if (vel_eb_new){
+                        Vbar(i,j,k) = vfrac_new(i,j,k);
+                    }
 
                     for ( int n = 0; n < ncomp; n++){
                         ubar(i,j,k,n) = vfrac_old(i,j,k)*U_in(i,j,k,n);
                         //ubar(i,j,k,n) = alpha(i,j,k,0)*vfrac_old(i,j,k)*U_in(i,j,k,n);
                         // ubar(i,j,k,n) = U_in(i,j,k,n);
+
+                        if (vel_eb_new){
+                            ubar(i,j,k,n) = vfrac_new(i,j,k)*out(i,j,k,n);
+                        }
                     }
                 }
                 else
@@ -401,9 +408,11 @@ void Redistribution::Apply ( Box const& bx, int ncomp,
                                                       + (delta_vol - Ueb_dot_an_new));
                             // fixme - need to think about this. if this correction is really assoc
                             // with the advective term, then we really need to be using some average
-                            // time n+1 value to multiply here, but then could we just use Qhat??
+                            // time n+1 value to multiply here??
+                            // Either that or do I alter Ubar? How?
                             // + out(i,j,k,n) * (delta_vol - Ueb_dot_an_new));
                         }
+
                     // if ( i==9 && j==8){
                     //     Print()<<"NU DELTA DIVU "<<delta_divU
                     //            <<" "<<Ueb_dot_an
@@ -426,7 +435,15 @@ void Redistribution::Apply ( Box const& bx, int ncomp,
                     // If we separate out kappa, then that mult by vfrac_old will never happen,
                     // so don't need this...
 
-                    scratch(i,j,k,n) = U_in(i,j,k,n) + dt * dUdt_in(i,j,k,n);
+                    //FIXME?
+                    if ( vfrac_old(i,j,k) == 0.0 && vfrac_new(i,j,k) > 0. ) {
+                        // Stash time n+1 advective flux in scratch -- still need to treat in
+                        // state_redistribution
+                        scratch(i,j,k,n) = Real(0.5)*dt*dUdt_in(i,j,k,n)*vfrac_new(i,j,k);
+                    }
+                    else {
+                        scratch(i,j,k,n) = U_in(i,j,k,n) + dt * dUdt_in(i,j,k,n);
+                    }
                     kappa(i,j,k) = dt * delta_divU;
 
                     // Now add to Ubar if cell has EB
@@ -434,17 +451,22 @@ void Redistribution::Apply ( Box const& bx, int ncomp,
                     {
                         for (int i_nbor = 1; i_nbor <= itr(i,j,k,0); i_nbor++)
                         {
+                            // FIXME - check to make sure the box contains rst?
                             int r = i+map[0][itr(i,j,k,i_nbor)];
                             int s = j+map[1][itr(i,j,k,i_nbor)];
                             int t = k+((AMREX_SPACEDIM < 3) ? 0 : map[2][itr(i,j,k,i_nbor)]);
 
                             // Add to my Ubar
-                            // Now add me to my nbs Ubars
+                            // Now add me to my nbs Ubar
                             // FIXME - does this double weight if nbhds reciprocal?
                             if ( n == 0 ){
                                 Vbar(i,j,k) += vfrac_old(r,s,t);
                                 Vbar(r,s,t) += vfrac_old(i,j,k);
                                 // Vbar(i,j,k) += alpha(i,j,k,1)*vfrac_old(r,s,t)/nrs(r,s,t);
+                                if (vel_eb_new){
+                                    Vbar(i,j,k) += vfrac_new(r,s,t);
+                                    Vbar(r,s,t) += vfrac_new(i,j,k);
+                                }
                             }
 
 // already doing n with ParallelFor
@@ -455,6 +477,11 @@ void Redistribution::Apply ( Box const& bx, int ncomp,
                             // Vbar += Real(1.);
                             // ubar(i,j,k,n) += U_in(r,s,t,n);
                             //}
+
+                            if (vel_eb_new) {
+                                ubar(i,j,k,n) += vfrac_new(r,s,t)*out(r,s,t,n);
+                                ubar(r,s,t,n) += vfrac_new(i,j,k)*out(i,j,k,n);
+                            }
                         }
                     }
                 }

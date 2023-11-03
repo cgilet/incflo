@@ -222,6 +222,11 @@ Redistribution::StateRedistribute ( Box const& bx, int ncomp,
 
                 for (int n = 0; n < ncomp; n++)
                 {
+                    // Add NU advective term to Qhat of it's merging partner
+                    // FIXME - this won't work for when SRD slopes are used; can't
+                    // garantee the MP slope_soln_hat will be correct...
+                    soln_hat(r,s,t,n) += alpha(r,s,t,1)*U_in(i,j,k,n)/nrs(i,j,k)/nbhd_vol(r,s,t);
+
                     slope_soln_hat(i,j,k,n) = soln_hat(r,s,t,n);
                 }
             }
