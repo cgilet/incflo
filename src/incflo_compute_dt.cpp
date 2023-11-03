@@ -266,17 +266,17 @@ void incflo::ComputeDt (int initialization, bool explicit_diffusion)
     // If using fixed time step, check CFL condition and give warning if not satisfied
     if (m_fixed_dt > Real(0.0))
     {
-    if(dt_new < m_fixed_dt)
-    {
-        amrex::Print() << "WARNING: fixed_dt does not satisfy CFL condition: \n"
-                       << "max dt by CFL     : " << dt_new << "\n"
-                       << "fixed dt specified: " << m_fixed_dt << std::endl;
-        amrex::Abort("incflo::ComputeDt(): Reduce dt to satisfy CFL");
-    }
-    m_dt = m_fixed_dt;
+        if(dt_new < m_fixed_dt)
+        {
+            amrex::Print() << "WARNING: fixed_dt does not satisfy CFL condition: \n"
+                           << "max dt by CFL     : " << dt_new << "\n"
+                           << "fixed dt specified: " << m_fixed_dt << std::endl;
+            amrex::Abort("incflo::ComputeDt(): Reduce dt to satisfy CFL");
+        }
+        m_dt = m_fixed_dt;
     }
     else
     {
-    m_dt = dt_new;
+        m_dt = dt_new;
     }
 }
