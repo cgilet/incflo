@@ -335,7 +335,7 @@ void Redistribution::Apply ( Box const& bx, int ncomp,
                     //Vbar(i,j,k) = alpha(i,j,k,0)*vfrac_old(i,j,k);
                     // Real Vbar = Real(1.0);
                     if (vel_eb_new){
-                        Vbar(i,j,k) = vfrac_new(i,j,k);
+                        Vbar(i,j,k) += vfrac_new(i,j,k);
                     }
 
                     for ( int n = 0; n < ncomp; n++){
@@ -344,7 +344,7 @@ void Redistribution::Apply ( Box const& bx, int ncomp,
                         // ubar(i,j,k,n) = U_in(i,j,k,n);
 
                         if (vel_eb_new){
-                            ubar(i,j,k,n) = vfrac_new(i,j,k)*out(i,j,k,n);
+                            ubar(i,j,k,n) += vfrac_new(i,j,k)*out(i,j,k,n);
                         }
                     }
                 }
@@ -466,6 +466,13 @@ void Redistribution::Apply ( Box const& bx, int ncomp,
                                 if (vel_eb_new){
                                     Vbar(i,j,k) += vfrac_new(r,s,t);
                                     Vbar(r,s,t) += vfrac_new(i,j,k);
+                                    
+                                    if ( ((i==15 || i==16) && (j==10)) ||
+                                         ((r==15 || r==16) && (s==10)) ){
+                                        AllPrint()<<i<<"i Vbar "<<Vbar(i,j,k)<<std::endl;
+                                        AllPrint()<<r<<"r Vbar "<<Vbar(r,s,t)<<std::endl;
+                                    }
+                                    
                                 }
                             }
 
@@ -481,6 +488,13 @@ void Redistribution::Apply ( Box const& bx, int ncomp,
                             if (vel_eb_new) {
                                 ubar(i,j,k,n) += vfrac_new(r,s,t)*out(r,s,t,n);
                                 ubar(r,s,t,n) += vfrac_new(i,j,k)*out(i,j,k,n);
+
+                                if ( ((i==15 || i==16) && (j==10)) ||
+                                     ((r==15 || r==16) && (s==10)) ){
+                                    AllPrint()<<i<<"i ubar "<<ubar(i,j,k)<<std::endl;
+                                    AllPrint()<<r<<"r ubar "<<ubar(r,s,t)<<std::endl;
+                                }
+
                             }
                         }
                     }
@@ -501,9 +515,19 @@ void Redistribution::Apply ( Box const& bx, int ncomp,
                 for (int n = 0; n < ncomp; n++){
                     if ( Vbar(i,j,k) > 0. )
                     {
+                    if ((i==15 || i==16) && (j==10)){
+                        AllPrint()<<i<<" pieces "<<ubar(i,j,k,n)<<" "<<Vbar(i,j,k)<<std::endl;
+                        AllPrint()<<i<<"F Ubar "<<ubar(i,j,k,n)/Vbar(i,j,k)<<std::endl;
+                    }
+
                         ubar(i,j,k,n) /= Vbar(i,j,k);
                     }
-                        // if ((i==8 || i==9) && j==8)
+
+                    // if (i==15 && (j==10||j==9 || j==12)){
+                    //     Print()<<j<<" Ubar "<<ubar(i,j,k,n)<<std::endl;
+                    //     Print()<<j<<" kappa "<<kappa(i,j,k)<<std::endl;
+                    // }
+                    // if ((i==8 || i==9) && j==8)
                         // {
                         //     Print()<<Dim3{r,s,t}<<"alpha, beta, N : "<<alpha(r,s,t,0)<<" "<<alpha(r,s,t,1)
                         //            <<" "<<nrs(r,s,t)<<std::endl;
