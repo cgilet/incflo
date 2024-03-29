@@ -55,7 +55,12 @@ void incflo::compute_vel_forces_on_level (int lev,
     GpuArray<Real,3> l_gp0{m_gp0[0], m_gp0[1], m_gp0[2]};
 
     auto const dx = geom[lev].CellSizeArray();
-
+//
+//  NOTE vel_forces are always formulated in relation to this form of the velocity
+//  equation regardless of m_advect_momentum
+//
+//      du/dt + u dot grad u = (div tau) / rho + vel_forces
+//
 #ifdef _OPENMP
 #pragma omp parallel if (Gpu::notInLaunchRegion())
 #endif

@@ -533,8 +533,9 @@ void incflo::ApplyCorrector()
             fillphysbc_density (lev, new_time, m_leveldata[lev]->density , ng_diffusion);
         }
 
+        auto rho = m_advect_momentum ? get_density_new() : GetVecOfPtrs(density_nph);
         Real dt_diff = (m_diff_type == DiffusionType::Implicit) ? m_dt : m_half*m_dt;
-        diffuse_velocity(get_velocity_new(), get_density_new(), GetVecOfConstPtrs(vel_eta), dt_diff);
+        diffuse_velocity(get_velocity_new(), rho, GetVecOfConstPtrs(vel_eta), dt_diff);
     }
 
     // **********************************************************************************************

@@ -4,6 +4,18 @@ using namespace amrex;
 //
 // Apply predictor:
 //
+// Solving
+//     d rho/ dt + div grad (rho u) = 0
+//
+//     d (rho trac) / dt + div grad (rho trac u) = div mu grad trac + f_t
+//
+//     if (!advect_momentum)
+//         du/dt + u dot grad u = -[grad(p + p0)] / rho + (div tau) / rho
+//     else
+//         d(rho u)/dt + div (rho u u) = -grad(p + p0) + div tau
+//
+// Note that LevelData always holds velocity (never momenta)
+//
 //  1. Use u = vel_old to compute
 //
 //      if (!advect_momentum) then
@@ -11,33 +23,54 @@ using namespace amrex;
 //      else
 //          conv_u  = - del dot (rho u u)
 //      conv_r  = - div( u rho  )
-//      conv_t  = - div( u trac )
+//      conv_t  = - div( u rho trac )
+//
 //      eta_old     = visosity at m_cur_time
+//
 //      if (m_diff_type == DiffusionType::Explicit)
-//         divtau _old = div( eta ( (grad u) + (grad u)^T ) ) / rho^n
-//         rhs = u + dt * ( conv + divtau_old )
+//          if (!advect_momentum)
+//              divtau _old = div( eta ( (grad u) + (grad u)^T ) ) / rho^n
+//              rhs = u + dt * ( conv + divtau_old )
+//          else
+//              divtau_old = div( eta ( (grad u) + (grad u)^T ) )
+//              rhs = [ u * rho^n  + dt * ( conv + divtau_old ) ] / rho^(n+1)
 //      else
 //         divtau_old  = 0.0
 //         rhs = u + dt * conv
 //
-//      eta     = eta at new_time
+//  2. Update density
+//      rho^(n+1) = rho^n + dt*conv_r
 //
-//  2. Add explicit forcing term i.e. gravity + lagged pressure gradient
+//  3. Add explicit forcing term i.e. gravity + lagged pressure gradient
 //
-//      rhs += dt * ( g - grad(p + p0) / rho^nph )
+//      if (!advect_momentum)
+//          rhs += dt * ( g - grad(p + p0) / rho^nph )
+//          Why do we not also update divtau_old/rho^n -> divtau_old/rho^nph ???
+//      else
+//          rhs += dt * [ g * rho^nph - grad(p + p0) ] / rho^(n+1)
 //
-//  3. A. If (m_diff_type == DiffusionType::Implicit)
+//  4. Solve (semi-)implicit diffusion equation for u*
+//     Why do we not update eta for (semi-)implicit solve???
+//     A. If (m_diff_type == DiffusionType::Implicit)
 //        solve implicit diffusion equation for u*
 //
-//     ( 1 - dt / rho^nph * div ( eta grad ) ) u* = u^n + dt * conv_u
-//                                                  + dt * ( g - grad(p + p0) / rho^nph )
+//       if (!advect_momentum)
+//          ( rho^nph - dt * div ( eta grad ) ) u* = rho^nph * [ u^n + dt * conv_u
+//                                                    + dt * ( g - grad(p + p0) / rho^nph ) ]
+//       else
+//          ( rho^(n+1) - dt * div ( eta grad ) ) u* = rho^n * u^n + dt * conv_u
+//                                                    + dt * ( g * rho^nph - grad(p + p0) )
 //
 //     B. If (m_diff_type == DiffusionType::Crank-Nicolson)
-//        solve semi-implicit diffusion equation for u*
 //
-//     ( 1 - (dt/2) / rho^nph * div ( eta_old grad ) ) u* = u^n +
-//            dt * conv_u + (dt/2) / rho * div (eta_old grad) u^n
-//          + dt * ( g - grad(p + p0) / rho^nph )
+//       if (!advect_momentum)
+//           ( rho^nph - (dt/2) * div ( eta grad ) ) u* = rho^nph * [ u^n + dt * conv_u
+//                                                    + dt/2 * div ( eta_old grad ) u^n / rho^nph
+//                                                    + dt * ( g - grad(p + p0) / rho^nph ) ]
+//       else
+//           ( rho^(n+1) - (dt/2) * div ( eta grad ) ) u* = rho^nph * [ u^n + dt * conv_u
+//                                                    + dt/2 * div ( eta_old grad ) u^n / rho^nph
+//                                                    + dt * ( g - grad(p + p0) / rho^nph ) ]
 //
 //  4. Apply projection
 //
@@ -280,7 +313,7 @@ void incflo::ApplyPredictor (bool incremental_projection)
                     amrex::ParallelFor(bx, [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept
                     {
                         // (rho trac)^new = (rho trac)^old + dt * (
-                        //                   div(rho trac u) + div (mu grad trac) + rho * f_t
+                        //                   div(rho trac u) + div (mu grad trac) + f_t )
                         for (int n = 0; n < l_ntrac; ++n)
                         {
                             Real tra_new = rho_o(i,j,k)*tra_o(i,j,k,n) + l_dt *
@@ -499,8 +532,9 @@ void incflo::ApplyPredictor (bool incremental_projection)
             fillphysbc_density (lev, new_time, m_leveldata[lev]->density , ng_diffusion);
         }
 
+        auto rho = m_advect_momentum ? get_density_new() : GetVecOfPtrs(density_nph);
         Real dt_diff = (m_diff_type == DiffusionType::Implicit) ? m_dt : m_half*m_dt;
-        diffuse_velocity(get_velocity_new(), get_density_new(), GetVecOfConstPtrs(vel_eta), dt_diff);
+        diffuse_velocity(get_velocity_new(), rho, GetVecOfConstPtrs(vel_eta), dt_diff);
     }
 
     // **********************************************************************************************
