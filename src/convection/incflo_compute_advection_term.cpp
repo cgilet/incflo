@@ -307,13 +307,14 @@ incflo::compute_convective_term (Vector<MultiFab*> const& conv_u,
         for (MFIter mfi(m_leveldata[lev]->velocity,TilingIfNotGPU()); mfi.isValid(); ++mfi) {
             Box const& bx = mfi.growntilebox(1);
             Box const& vbx = mfi.validbox();
-            Array4<Real> const& umx   = u_mac[lev]->array(mfi);
-            Array4<Real> const& umy   = v_mac[lev]->array(mfi);
-            Array4<Real> const& umz   = w_mac[lev]->array(mfi);
+            AMREX_D_TERM(Array4<Real> const& umx   = u_mac[lev]->array(mfi);,
+                         Array4<Real> const& umy   = v_mac[lev]->array(mfi);,
+                         Array4<Real> const& umz   = w_mac[lev]->array(mfi););
 
             amrex::ParallelFor(bx,
             [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept
             {
+                // FIXME -- need to look at x=47 also?
                 if ( i==48 && j==48 && k==47 && lev==1){
                     Real divc = (umx(i+1,j,k) - umx(i,j  ,k  ))*dxinv[0]
                         + (umy(i,j+1,k) - umy(i  ,j,k  ))*dxinv[1]
@@ -323,7 +324,7 @@ incflo::compute_convective_term (Vector<MultiFab*> const& conv_u,
                     // Print()<<"umac "<<umx(i,j  ,k  )
                     //        <<" "<<umy(i  ,j,k  )<<std::endl;
                 }
-                if ( i==43 && j==43 && k==47 && lev==1){
+                if ( i==46 && j==43 && k==47 && lev==1){
                     Real divc = (umx(i+1,j,k) - umx(i,j  ,k  ))*dxinv[0]
                         + (umy(i,j+1,k) - umy(i  ,j,k  ))*dxinv[1]
                         + (umz(i,j,k+1) - umz(i  ,j  ,k))*dxinv[2];
@@ -331,6 +332,13 @@ incflo::compute_convective_term (Vector<MultiFab*> const& conv_u,
                            <<" div(Umac) fine outside fine valid domain = "<<divc<<std::endl;
                 }
                 if ( i==48 && j==47 && k==47 && lev==1){
+                    Real divc = (umx(i+1,j,k) - umx(i,j  ,k  ))*dxinv[0]
+                        + (umy(i,j+1,k) - umy(i  ,j,k  ))*dxinv[1]
+                        + (umz(i,j,k+1) - umz(i  ,j  ,k))*dxinv[2];
+                    Print()<<"lev "<<lev<<" validbx:"<<vbx<<" cell:"<<Dim3{i,j,k}<<" "
+                           <<" div(Umac) fine outside fine valid domain = "<<divc<<std::endl;
+                }
+                if ( i==47 && j==47 && k==47 && lev==1){
                     Real divc = (umx(i+1,j,k) - umx(i,j  ,k  ))*dxinv[0]
                         + (umy(i,j+1,k) - umy(i  ,j,k  ))*dxinv[1]
                         + (umz(i,j,k+1) - umz(i  ,j  ,k))*dxinv[2];
@@ -354,35 +362,35 @@ incflo::compute_convective_term (Vector<MultiFab*> const& conv_u,
             });
 
 // 2D appears okay for rayleigh taylor
-            // amrex::ParallelFor(bx,
-            // [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept
-            // {
-            //     if ( i==48 && j==47 && lev==1){
-            //         Real divc = (umx(i+1,j,k) - umx(i,j  ,k  ))*dxinv[0]
-            //             + (umy(i,j+1,k) - umy(i  ,j,k  ))*dxinv[1];
-            //         Print()<<"lev "<<lev<<" validbx:"<<vbx<<" cell:"<<Dim3{i,j,k}<<" "
-            //                <<" div(Umac) fine outside fine valid domain = "<<divc<<std::endl;
-            //     }
-            //     if ( i==43 && j==47 && lev==1){
-            //         Real divc = (umx(i+1,j,k) - umx(i,j  ,k  ))*dxinv[0]
-            //             + (umy(i,j+1,k) - umy(i  ,j,k  ))*dxinv[1];
-            //         Print()<<"lev "<<lev<<" validbx:"<<vbx<<" cell:"<<Dim3{i,j,k}<<" "
-            //                <<" div(Umac) fine outside fine valid domain = "<<divc<<std::endl;
-            //     }
-            //     if ( i==48 && j==48 && lev==1){
-            //         Real divc = (umx(i+1,j,k) - umx(i,j  ,k  ))*dxinv[0]
-            //             + (umy(i,j+1,k) - umy(i  ,j,k  ))*dxinv[1];
-            //         Print()<<"lev "<<lev<<" validbx:"<<vbx<<" cell:"<<Dim3{i,j,k}<<" "
-            //                <<" div(Umac) fine inside fine valid domain = "<<divc<<std::endl;
-            //     }
-            //     if ( i==24 && j==23 && lev==0){
-            //         Real divc = (umx(i+1,j,k) - umx(i,j  ,k  ))*dxinv[0]
-            //             + (umy(i,j+1,k) - umy(i  ,j,k  ))*dxinv[1];
-            //         Print()<<"lev "<<lev<<" validbx:"<<vbx<<" cell:"<<Dim3{i,j,k}<<" "
-            //                <<" div(Umac) coarse under fine ghost = "<<divc<<std::endl;
-            //     }
-            // });
-        }}
+        //     amrex::ParallelFor(bx,
+        //     [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept
+        //     {
+        //         if ( i==48 && j==47 && lev==1){
+        //             Real divc = (umx(i+1,j,k) - umx(i,j  ,k  ))*dxinv[0]
+        //                 + (umy(i,j+1,k) - umy(i  ,j,k  ))*dxinv[1];
+        //             Print()<<"lev "<<lev<<" validbx:"<<vbx<<" cell:"<<Dim3{i,j,k}<<" "
+        //                    <<" div(Umac) fine outside fine valid domain = "<<divc<<std::endl;
+        //         }
+        //         if ( i==43 && j==47 && lev==1){
+        //             Real divc = (umx(i+1,j,k) - umx(i,j  ,k  ))*dxinv[0]
+        //                 + (umy(i,j+1,k) - umy(i  ,j,k  ))*dxinv[1];
+        //             Print()<<"lev "<<lev<<" validbx:"<<vbx<<" cell:"<<Dim3{i,j,k}<<" "
+        //                    <<" div(Umac) fine outside fine valid domain = "<<divc<<std::endl;
+        //         }
+        //         if ( i==48 && j==48 && lev==1){
+        //             Real divc = (umx(i+1,j,k) - umx(i,j  ,k  ))*dxinv[0]
+        //                 + (umy(i,j+1,k) - umy(i  ,j,k  ))*dxinv[1];
+        //             Print()<<"lev "<<lev<<" validbx:"<<vbx<<" cell:"<<Dim3{i,j,k}<<" "
+        //                    <<" div(Umac) fine inside fine valid domain = "<<divc<<std::endl;
+        //         }
+        //         if ( i==24 && j==23 && lev==0){
+        //             Real divc = (umx(i+1,j,k) - umx(i,j  ,k  ))*dxinv[0]
+        //                 + (umy(i,j+1,k) - umy(i  ,j,k  ))*dxinv[1];
+        //             Print()<<"lev "<<lev<<" validbx:"<<vbx<<" cell:"<<Dim3{i,j,k}<<" "
+        //                    <<" div(Umac) coarse under fine ghost = "<<divc<<std::endl;
+        //         }
+        //     });
+         }}
         // ************************************************************************
         // Compute advective fluxes
         // ************************************************************************
