@@ -1,4 +1,4 @@
-AMREX_HOME ?= ../../amrex
+AMREX_HOME ?= ../../amrex_fork
 AMREX_HYDRO_HOME ?= ../../AMReX-Hydro
 TOP = ..
 
@@ -10,12 +10,12 @@ PRECISION  = DOUBLE
 
 TINY_PROFILE = FALSE
 
-DEBUG      = TRUE
 DEBUG      = FALSE
+DEBUG      = TRUE
 
 COMP	   = gnu
 
-USE_MPI    = TRUE
+USE_MPI    = FALSE
 USE_OMP    = FALSE
 USE_CUDA   = FALSE
 

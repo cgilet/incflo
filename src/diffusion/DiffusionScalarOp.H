@@ -15,9 +15,10 @@ class DiffusionScalarOp
 public:
     DiffusionScalarOp (incflo* a_incflo);
 
-    void diffuse_scalar (amrex::Vector<amrex::MultiFab*> const& tracer,
+    void diffuse_scalar (amrex::Vector<amrex::MultiFab*> const& a_scalar,
                          amrex::Vector<amrex::MultiFab*> const& density,
                          amrex::Vector<amrex::MultiFab const*> const& eta,
+                         amrex::Vector<int> const& iconserv,
                          amrex::Real dt);
 
     void diffuse_vel_components (

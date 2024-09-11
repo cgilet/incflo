@@ -97,10 +97,10 @@ void incflo::ApplyPredictor (bool incremental_projection)
     // *************************************************************************************
     // Allocate space for half-time density
     // *************************************************************************************
-    // Forcing terms
-    Vector<MultiFab> vel_forces, tra_forces;
+    // Forcing terms for velocity, tracers, temperature
+    Vector<MultiFab> vel_forces, tra_forces, T_forces;
 
-    Vector<MultiFab> vel_eta, tra_eta;
+    Vector<MultiFab> vel_eta, tra_eta, T_eta;
 
     // *************************************************************************************
     // Allocate space for the forcing terms
@@ -108,14 +108,17 @@ void incflo::ApplyPredictor (bool incremental_projection)
     for (int lev = 0; lev <= finest_level; ++lev) {
         vel_forces.emplace_back(grids[lev], dmap[lev], AMREX_SPACEDIM, nghost_force(),
                                 MFInfo(), Factory(lev));
-
+        vel_eta.emplace_back(grids[lev], dmap[lev], 1, 1, MFInfo(), Factory(lev));
+        
         if (m_advect_tracer) {
             tra_forces.emplace_back(grids[lev], dmap[lev], m_ntrac, nghost_force(),
                                     MFInfo(), Factory(lev));
-        }
-        vel_eta.emplace_back(grids[lev], dmap[lev], 1, 1, MFInfo(), Factory(lev));
-        if (m_advect_tracer) {
             tra_eta.emplace_back(grids[lev], dmap[lev], m_ntrac, 1, MFInfo(), Factory(lev));
+        }
+        if (m_use_temperature) {
+            T_forces.emplace_back(grids[lev], dmap[lev], 1, nghost_force(),
+                                    MFInfo(), Factory(lev));
+            T_eta.emplace_back(grids[lev], dmap[lev], 1, 1, MFInfo(), Factory(lev));        
         }
     }
 
@@ -141,9 +144,17 @@ void incflo::ApplyPredictor (bool incremental_projection)
     // *************************************************************************************
     if (m_advect_tracer)
     {
-        compute_tracer_diff_coeff(GetVecOfPtrs(tra_eta),1);
+        compute_tracer_diff_coeff(GetVecOfPtrs(tra_eta),tra_eta[0].nComp());
         if (need_divtau()) {
             compute_laps(get_laps_old(), get_tracer_old_const(), GetVecOfConstPtrs(tra_eta));
+        }
+    }
+    if (m_use_temperature)
+    {
+        compute_temperature_diff_coeff(GetVecOfPtrs(T_eta),T_eta[0].nComp());
+        if (need_divtau()) {
+            compute_laps(get_laps_T_old(), get_temperature_old_const(), GetVecOfConstPtrs(T_eta));
+            // Mulitply by rho cp
         }
     }
 

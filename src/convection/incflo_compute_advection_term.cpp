@@ -46,15 +46,18 @@ void incflo::init_advection ()
 void
 incflo::compute_convective_term (Vector<MultiFab*> const& conv_u,
                                  Vector<MultiFab*> const& conv_r,
-                                 Vector<MultiFab*> const& conv_t,
+                                 Vector<MultiFab*> const& conv_tra,
+                                 Vector<MultiFab*> const& conv_tem,
                                  Vector<MultiFab const*> const& vel,
                                  Vector<MultiFab const*> const& density,
                                  Vector<MultiFab const*> const& tracer,
+                                 Vector<MultiFab const*> const& temperature,
                                  AMREX_D_DECL(Vector<MultiFab*> const& u_mac,
                                               Vector<MultiFab*> const& v_mac,
                                               Vector<MultiFab*> const& w_mac),
                                  Vector<MultiFab*      > const& vel_forces,
                                  Vector<MultiFab*      > const& tra_forces,
+                                 Vector<MultiFab*      > const& tem_forces,
                                  Real /*time*/)
 {
     bool fluxes_are_area_weighted = false;
@@ -191,6 +194,17 @@ incflo::compute_convective_term (Vector<MultiFab*> const& conv_u,
                 fillpatch_force(m_cur_time, tra_forces, nghost_force());
         }
 
+        if (m_use_temperature)
+        {
+            compute_T_forces(tem_forces, get_density_old_const());
+            if (m_godunov_include_diff_in_forcing)
+                for (int lev = 0; lev <= finest_level; ++lev)
+                    // FIXME? Saxpy? with 1/rhocp - could be as low as point function or by level?
+                    MultiFab::Add(*tem_forces[lev], m_leveldata[lev]->laps_T_o, 0, 0, 1, 0);
+            if (nghost_force() > 0)
+                fillpatch_force(m_cur_time, tem_forces, nghost_force());
+        }
+
     } // end m_advection_type
 
     for (int lev = 0; lev <= finest_level; ++lev)
@@ -300,7 +314,7 @@ incflo::compute_convective_term (Vector<MultiFab*> const& conv_u,
         // *************************************************************************************
         // Define domain boundary conditions at half-time to be used for fluxes if using Godunov
         // *************************************************************************************
-        //
+        // For time-dependent Dirichlet BCs
         MultiFab  vel_nph(    vel[lev]->boxArray(),    vel[lev]->DistributionMap(),AMREX_SPACEDIM,1);
         MultiFab  rho_nph(density[lev]->boxArray(),density[lev]->DistributionMap(),1,1);
         MultiFab trac_nph( tracer[lev]->boxArray(), tracer[lev]->DistributionMap(),m_ntrac,1);
@@ -353,6 +367,13 @@ incflo::compute_convective_term (Vector<MultiFab*> const& conv_u,
             if (m_has_mixedBC) {
                 tracBC_MF = make_BC_MF(lev, m_bcrec_tracer_d, "tracer");
             }
+        }
+        // FIXME? do all the scalars really need individual BC MFs?
+        // Need to think about general mixed BC vs inflow-outflow only?
+        std::unique_ptr<iMultiFab> tempBC_MF;
+        if (m_use_temperature && m_has_mixedBC) {
+            Abort("Temperature equation with mixed BC not completed yet");
+            tempBC_MF = make_BC_MF(lev, m_bcrec_temperature_d, "temperature");
         }
 
         // ************************************************************************
@@ -550,6 +571,48 @@ incflo::compute_convective_term (Vector<MultiFab*> const& conv_u,
                                           is_velocity, fluxes_are_area_weighted,
                                           m_advection_type, PPM::default_limiter,
                                           allow_inflow_on_outflow, tracbc_arr);
+            }
+
+            // ************************************************************************
+            // Temperature
+            // ************************************************************************
+            if (m_use_temperature) {
+                // Temperature adveciton is always non-conservative
+
+                // FIXME- check this!!!
+                face_comp += m_ntrac;
+                ncomp = 1;
+                is_velocity = false;
+                allow_inflow_on_outflow = false;
+                Array4<int const> const& tempbc_arr = tempBC_MF ? (*tempBC_MF).const_array(mfi)
+                                                                : Array4<int const>{};
+                HydroUtils::ComputeFluxesOnBoxFromState( bx, ncomp, mfi,
+                                          temperature[lev]->const_array(mfi),
+                                          temp_nph.const_array(mfi),
+                                          AMREX_D_DECL(flux_x[lev].array(mfi,face_comp),
+                                                       flux_y[lev].array(mfi,face_comp),
+                                                       flux_z[lev].array(mfi,face_comp)),
+                                          AMREX_D_DECL(face_x[lev].array(mfi,face_comp),
+                                                       face_y[lev].array(mfi,face_comp),
+                                                       face_z[lev].array(mfi,face_comp)),
+                                          knownFaceStates,
+                                          AMREX_D_DECL(u_mac[lev]->const_array(mfi),
+                                                       v_mac[lev]->const_array(mfi),
+                                                       w_mac[lev]->const_array(mfi)),
+                                          divu_arr,
+                                          (!tem_forces.empty()) ? tem_forces[lev]->const_array(mfi) : Array4<Real const>{},
+                                          geom[lev], m_dt,
+                                          get_temperature_bcrec(),
+                                          get_temperature_bcrec_device_ptr(),
+                                          get_temperature_iconserv_device_ptr(),
+#ifdef AMREX_USE_EB
+                                          ebfact,
+                                          m_eb_flow.enabled ? get_temperature_eb()[lev]->const_array(mfi) : Array4<Real const>{},
+#endif
+                                          m_godunov_ppm, m_godunov_use_forces_in_trans,
+                                          is_velocity, fluxes_are_area_weighted,
+                                          m_advection_type, PPM::default_limiter,
+                                          allow_inflow_on_outflow, tempbc_arr);
             }
         } // mfi
     } // lev

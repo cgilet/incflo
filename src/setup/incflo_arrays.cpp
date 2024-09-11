@@ -28,15 +28,30 @@ incflo::LevelData::LevelData (amrex::BoxArray const& ba,
       conv_density_o  (ba, dm, 1                 , 0, MFInfo(), fact),
       conv_tracer_o   (ba, dm, my_incflo->m_ntrac, 0, MFInfo(), fact)
 {
+    if (my_incflo->m_use_temperature) {
+        temperature    (ba, dm, 1, my_incflo->nghost_state(), MFInfo(), fact);
+        temperature_eb (ba, dm, 1, my_incflo->nghost_state(), MFInfo(), fact);
+        temperature_o  (ba, dm, 1, my_incflo->nghost_state(), MFInfo(), fact);
+
+        conv_temperature_o   (ba, dm, 1, 0, MFInfo(), fact);
+    }
+
     if (my_incflo->m_advection_type != "MOL") {
         divtau_o.define(ba, dm, AMREX_SPACEDIM, 0, MFInfo(), fact);
         if (my_incflo->m_advect_tracer) {
             laps_o.define(ba, dm, my_incflo->m_ntrac, 0, MFInfo(), fact);
         }
+        if (my_incflo->m_use_temperature) {
+            laps_T_o.define(ba, dm, 1, 0, MFInfo(), fact);
+        }
     } else {
         conv_velocity.define(ba, dm, AMREX_SPACEDIM   , 0, MFInfo(), fact);
         conv_density.define (ba, dm, 1                , 0, MFInfo(), fact);
         conv_tracer.define (ba, dm, my_incflo->m_ntrac, 0, MFInfo(), fact);
+
+        if (my_incflo->m_use_temperature) {
+            conv_temperature (ba, dm, 1, 0, MFInfo(), fact);
+        }
 
         bool implicit_diffusion = my_incflo->m_diff_type == DiffusionType::Implicit;
         if (!implicit_diffusion || my_incflo->use_tensor_correction)
@@ -44,10 +59,16 @@ incflo::LevelData::LevelData (amrex::BoxArray const& ba,
             divtau.define  (ba, dm, AMREX_SPACEDIM, 0, MFInfo(), fact);
             divtau_o.define(ba, dm, AMREX_SPACEDIM, 0, MFInfo(), fact);
         }
-        if (!implicit_diffusion && my_incflo->m_advect_tracer)
+        if (!implicit_diffusion)
         {
-            laps.define  (ba, dm, my_incflo->m_ntrac, 0, MFInfo(), fact);
-            laps_o.define(ba, dm, my_incflo->m_ntrac, 0, MFInfo(), fact);
+            if ( my_incflo->m_advect_tracer) {
+                laps.define  (ba, dm, my_incflo->m_ntrac, 0, MFInfo(), fact);
+                laps_o.define(ba, dm, my_incflo->m_ntrac, 0, MFInfo(), fact);
+            }
+            if (my_incflo->m_use_temperature) {
+                laps_T.define  (ba, dm, 1, 0, MFInfo(), fact);
+                laps_T_o.define(ba, dm, 1, 0, MFInfo(), fact);
+            }
         }
     }
 }

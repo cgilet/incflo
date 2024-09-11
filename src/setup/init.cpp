@@ -154,6 +154,19 @@ void incflo::ReadParameters ()
         for (int i = 0; i < m_ntrac; i++) {
             amrex::Print() << "Tracer diffusion coeff: " << i << ":" << m_mu_s[i] << std::endl;
         }
+
+        pp.query("use_temperature", m_use_temperature);
+        // Checks for things not yet implemented/checked
+        if (m_use_temperature && m_advection_type == "MOL") {
+            // temperature equation not added to the corrector
+            amrex::Abort("Temperature equation not yet implemented with MOL option");
+        }
+#ifdef AMREX_USE_EB
+        if (m_use_temperature) {
+            amrex::Abort("Temperature equation not yet tested with EB");
+            // Maybe will want to disallow EB flow with T at first...
+        }
+#endif
     } // end prefix incflo
 
     ReadIOParameters();
@@ -502,6 +515,16 @@ incflo::InitialRedistribution ()
                                               AMREX_D_DECL(fcx, fcy, fcz), ccc,
                                               bc_tra, geom[lev], m_redistribution_type);
                 }
+                if (m_use_temperature)
+                {
+                    ncomp = 1;
+                    auto const& bc_T = get_temperature_bcrec_device_ptr();
+                    ApplyInitialRedistribution( bx,ncomp,
+                                              ld.temperature.array(mfi), ld.temperature_o.array(mfi),
+                                              flag, AMREX_D_DECL(apx, apy, apz), vfrac,
+                                              AMREX_D_DECL(fcx, fcy, fcz), ccc,
+                                              bc_T, geom[lev], m_redistribution_type);
+                }
             }
         }
 
@@ -509,6 +532,9 @@ incflo::InitialRedistribution ()
         ld.velocity.FillBoundary(geom[lev].periodicity());
         ld.density.FillBoundary(geom[lev].periodicity());
         ld.tracer.FillBoundary(geom[lev].periodicity());
+        if (m_use_temperature) {
+            ld.temperature.FillBoundary(geom[lev].periodicity());
+        }
     }
   }
 }

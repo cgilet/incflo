@@ -147,30 +147,31 @@ DiffusionScalarOp::readParameters ()
 }
 
 void
-DiffusionScalarOp::diffuse_scalar (Vector<MultiFab*> const& tracer,
+DiffusionScalarOp::diffuse_scalar (Vector<MultiFab*> const& a_scalar,
                                    Vector<MultiFab*> const& density,
                                    Vector<MultiFab const*> const& eta,
+                                   amrex::Vector<int> const& iconserv,
                                    Real dt)
 {
     //
     // Solves
     //      alpha a - beta div ( b grad )
     //
-    // So for conservative: d(rho tra) / dt - div mu grad tra = -div(U rho tra) + rho H -->
-    //                      ( rho - dt div mu grad ) tra^(n+1) = rho tra^(*,n+1)
+    // So for conservative: d(rho sca) / dt - div mu grad sca = -div(U rho sca) + rho H -->
+    //                      ( rho - dt div mu grad ) sca^(n+1) = rho sca^(*,n+1)
     //      alpha: 1
     //      a: rho
     //      beta: dt
     //      b: mu
-    //      RHS: density * tracer
+    //      RHS: density * a_scalar
     //
-    // So for non- conservative: d tra / dt - div mu grad tra = -U dot grad tra + H -->
-    //                           ( 1 - dt div mu grad ) tra^(n+1) = tra^(*,n+1)
+    // So for non- conservative: d sca / dt - div mu grad sca = -U dot grad sca + H -->
+    //                           ( 1 - dt div mu grad ) sca^(n+1) = sca^(*,n+1)
     //      alpha: 1
     //      a: 1
     //      beta: dt
     //      b: mu
-    //      RHS: tracer
+    //      RHS: a_scalar
 
     if (m_verbose > 0) {
         amrex::Print() << "Diffusing scalars one at a time ..." << std::endl;
@@ -181,10 +182,9 @@ DiffusionScalarOp::diffuse_scalar (Vector<MultiFab*> const& tracer,
     Vector<MultiFab> rhs_c(finest_level+1);
     // Note only conservative uses this rhs_c container
     for (int lev = 0; lev <= finest_level; ++lev) {
-        rhs_c[lev].define(tracer[lev]->boxArray(), tracer[lev]->DistributionMap(), 1, 0);
+        rhs_c[lev].define(a_scalar[lev]->boxArray(), a_scalar[lev]->DistributionMap(), 1, 0);
     }
 
-    auto iconserv = m_incflo->get_tracer_iconserv();
 #ifdef AMREX_USE_EB
     if (m_eb_scal_solve_op)
     {
@@ -210,7 +210,7 @@ DiffusionScalarOp::diffuse_scalar (Vector<MultiFab*> const& tracer,
         }
     }
 
-    for (int comp = 0; comp < tracer[0]->nComp(); ++comp)
+    for (int comp = 0; comp < a_scalar[0]->nComp(); ++comp)
     {
 #ifdef AMREX_USE_EB
         if (m_eb_scal_solve_op)
@@ -255,10 +255,10 @@ DiffusionScalarOp::diffuse_scalar (Vector<MultiFab*> const& tracer,
         Vector<MultiFab> phi;
         Vector<MultiFab> rhs;
         for (int lev = 0; lev <= finest_level; ++lev) {
-            phi.emplace_back(*tracer[lev], amrex::make_alias, comp, 1);
+            phi.emplace_back(*a_scalar[lev], amrex::make_alias, comp, 1);
 
             if ( !iconserv[comp] ) {
-                rhs.emplace_back(*tracer[lev], amrex::make_alias, comp, 1);
+                rhs.emplace_back(*a_scalar[lev], amrex::make_alias, comp, 1);
             } else {
                 rhs.emplace_back(rhs_c[lev], amrex::make_alias, 0, 1);
 #ifdef _OPENMP
@@ -267,11 +267,11 @@ DiffusionScalarOp::diffuse_scalar (Vector<MultiFab*> const& tracer,
                 for (MFIter mfi(rhs[lev],TilingIfNotGPU()); mfi.isValid(); ++mfi) {
                     Box const& bx = mfi.tilebox();
                     Array4<Real> const& rhs_a = rhs[lev].array(mfi);
-                    Array4<Real const> const& tra_a = tracer[lev]->const_array(mfi,comp);
+                    Array4<Real const> const& sca_a = a_scalar[lev]->const_array(mfi,comp);
                     Array4<Real const> const& rho_a = density[lev]->const_array(mfi);
                     ParallelFor(bx, [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept
                     {
-                        rhs_a(i,j,k) = rho_a(i,j,k) * tra_a(i,j,k);
+                        rhs_a(i,j,k) = rho_a(i,j,k) * sca_a(i,j,k);
                     });
                 }
             }
@@ -486,6 +486,7 @@ void DiffusionScalarOp::compute_laps (Vector<MultiFab*> const& a_laps,
     BL_PROFILE("DiffusionScalarOp::compute_laps");
 
     int finest_level = m_incflo->finestLevel();
+    int n_comp = a_laps[0]->nComp();
 
 #ifdef AMREX_USE_EB
     if (m_eb_scal_apply_op)
@@ -495,7 +496,7 @@ void DiffusionScalarOp::compute_laps (Vector<MultiFab*> const& a_laps,
         for (int lev = 0; lev <= finest_level; ++lev) {
             laps_tmp[lev].define(a_laps[lev]->boxArray(),
                                  a_laps[lev]->DistributionMap(),
-                                 m_incflo->m_ntrac, tmp_comp, MFInfo(),
+                                 n_comp, tmp_comp, MFInfo(),
                                  a_laps[lev]->Factory());
             laps_tmp[lev].setVal(0.0);
         }
@@ -508,7 +509,7 @@ void DiffusionScalarOp::compute_laps (Vector<MultiFab*> const& a_laps,
         // m_eb_scal_apply_op->setPhiOnCentroid();
 
         // FIXME? Can we do the solve together now?
-        for (int comp = 0; comp < m_incflo->m_ntrac; ++comp) {
+        for (int comp = 0; comp < n_comp; ++comp) {
             int eta_comp = comp;
 
             if ( m_incflo->m_has_mixedBC && comp>0 ){
@@ -545,9 +546,13 @@ void DiffusionScalarOp::compute_laps (Vector<MultiFab*> const& a_laps,
 
         for(int lev = 0; lev <= finest_level; lev++)
         {
+            // Note that this is strictly flux redistribution
+            // May also now be written in a way that it's safe to have laps_tmp = a_laps
             amrex::single_level_redistribute(laps_tmp[lev],
-                                             *a_laps[lev], 0, m_incflo->m_ntrac,
+                                             *a_laps[lev], 0, n_comp,
                                              m_incflo->Geom(lev));
+            // This will use SRD if that's what's set for m_redistribution_type
+            // Need to think about how to make this work with temperature b/c BC is different
             // auto const& bc = m_incflo->get_tracer_bcrec_device_ptr();
             // m_incflo->redistribute_term(*a_laps[lev], laps_tmp[lev], *a_scalar[lev],
             //                 bc, lev);
@@ -559,7 +564,7 @@ void DiffusionScalarOp::compute_laps (Vector<MultiFab*> const& a_laps,
         // We want to return div (mu grad)) phi
         m_reg_scal_apply_op->setScalars(0.0, -1.0);
 
-        for (int comp = 0; comp < m_incflo->m_ntrac; ++comp) {
+        for (int comp = 0; comp < n_comp; ++comp) {
 
             int eta_comp = comp;
 

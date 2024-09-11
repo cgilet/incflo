@@ -13,6 +13,7 @@ void incflo::init_bcs ()
     m_bcrec_velocity.resize(AMREX_SPACEDIM);
     m_bcrec_density.resize(1);
     if (m_ntrac > 0) { m_bcrec_tracer.resize(m_ntrac); }
+    m_bcrec_temperature.resize(1);
 
     auto f = [this] (std::string const& bcid, Orientation ori)
     {
@@ -21,6 +22,8 @@ void incflo::init_bcs ()
                      m_bc_velocity[ori][1] = 0.0;,
                      m_bc_velocity[ori][2] = 0.0;);
         m_bc_tracer[ori].resize(m_ntrac,0.0);
+// FIXME?  do i want something reasonable here, or force users to set inputs?
+        m_bc_temperature[ori] = 1.0;
 
         ParmParse pp(bcid);
         std::string bc_type_in = "null";
@@ -41,6 +44,7 @@ void incflo::init_bcs ()
                          m_bcrec_velocity[2].set(ori, BCType::foextrap););
             m_bcrec_density[0].set(ori, BCType::foextrap);
             for (auto& b : m_bcrec_tracer) { b.set(ori, BCType::foextrap); }
+            m_bcrec_temperature[0].set(ori, BCType::foextrap);
         }
         else if (bc_type == "pressure_outflow" || bc_type == "po")
         {
@@ -56,6 +60,7 @@ void incflo::init_bcs ()
                          m_bcrec_velocity[2].set(ori, BCType::foextrap););
             m_bcrec_density[0].set(ori, BCType::foextrap);
             for (auto& b : m_bcrec_tracer) { b.set(ori, BCType::foextrap); }
+            m_bcrec_temperature[0].set(ori, BCType::foextrap);
         }
         else if (bc_type == "mass_inflow" || bc_type == "mi")
         {
@@ -72,6 +77,7 @@ void incflo::init_bcs ()
 
             pp.query("density", m_bc_density[ori]);
             pp.queryarr("tracer", m_bc_tracer[ori], 0, m_ntrac);
+            pp.query("temperature", m_bc_temperature[ori]);
 
             // Set mathematical BCs
             AMREX_D_TERM(m_bcrec_velocity[0].set(ori, BCType::ext_dir);,
@@ -79,6 +85,7 @@ void incflo::init_bcs ()
                          m_bcrec_velocity[2].set(ori, BCType::ext_dir););
             m_bcrec_density[0].set(ori, BCType::ext_dir);
             for (auto& b : m_bcrec_tracer) { b.set(ori, BCType::ext_dir); }
+            m_bcrec_temperature[0].set(ori, BCType::ext_dir);
         }
         else if (bc_type == "direction_dependent" || bc_type == "dd" )
         {
@@ -97,12 +104,14 @@ void incflo::init_bcs ()
 
             pp.query("density", m_bc_density[ori]);
             pp.queryarr("tracer", m_bc_tracer[ori], 0, m_ntrac);
+            pp.query("temperature", m_bc_temperature[ori]);
 
             AMREX_D_TERM(m_bcrec_velocity[0].set(ori, BCType::direction_dependent);,
                          m_bcrec_velocity[1].set(ori, BCType::direction_dependent);,
                          m_bcrec_velocity[2].set(ori, BCType::direction_dependent););
             m_bcrec_density[0].set(ori, BCType::direction_dependent);
             for (auto& b : m_bcrec_tracer) { b.set(ori, BCType::direction_dependent); }
+            m_bcrec_temperature[0].set(ori, BCType::direction_dependent);
         }
         else if (bc_type == "no_slip_wall" || bc_type == "nsw")
         {
@@ -126,6 +135,7 @@ void incflo::init_bcs ()
             // We potentially read in values at no-slip walls in the event that the
             // tracer has Dirichlet bcs
             pp.queryarr("tracer", m_bc_tracer[ori], 0, m_ntrac);
+            pp.query("temperature", m_bc_temperature[ori], 0, 1);
 
             // Set mathematical BCs
             AMREX_D_TERM(m_bcrec_velocity[0].set(ori, BCType::ext_dir);,
@@ -136,6 +146,11 @@ void incflo::init_bcs ()
                 for (auto& b : m_bcrec_tracer) { b.set(ori, BCType::ext_dir); }
             } else {
                 for (auto& b : m_bcrec_tracer) { b.set(ori, BCType::foextrap); }
+            }
+            if ( pp.contains("temperature") ) {
+                for (auto& b : m_bcrec_temperature) { b.set(ori, BCType::ext_dir); }
+            } else {
+                for (auto& b : m_bcrec_temperature) { b.set(ori, BCType::reflect_even); }
             }
         }
         else if (bc_type == "slip_wall" || bc_type == "sw")
@@ -151,6 +166,7 @@ void incflo::init_bcs ()
             // We potentially read in values at slip walls in the event that the
             // tracer has Dirichlet bcs
             pp.queryarr("tracer", m_bc_tracer[ori], 0, m_ntrac);
+            pp.query("temperature", m_bc_temperature[ori], 0, 1);
 
             // Tangential directions have hoextrap
             AMREX_D_TERM(m_bcrec_velocity[0].set(ori, BCType::hoextrap);,
@@ -174,6 +190,11 @@ void incflo::init_bcs ()
                         b.set(ori, BCType::hoextrap);
                     }
                 }
+            }
+            if ( pp.contains("temperature") ) {
+                for (auto& b : m_bcrec_temperature) { b.set(ori, BCType::ext_dir); }
+            } else {
+                for (auto& b : m_bcrec_temperature) { b.set(ori, BCType::reflect_even); }
             }
         }
         else if (bc_type == "mixed" )
@@ -208,6 +229,7 @@ void incflo::init_bcs ()
 
             pp.query("density", m_bc_density[ori]);
             pp.queryarr("tracer", m_bc_tracer[ori], 0, m_ntrac);
+            pp.query("temperature", m_bc_temperature[ori]);
 
             // Set mathematical BCs. BC_mask will handle Dirichlet part.
             AMREX_D_TERM(m_bcrec_velocity[0].set(ori, BCType::foextrap);,
@@ -215,6 +237,7 @@ void incflo::init_bcs ()
                          m_bcrec_velocity[2].set(ori, BCType::foextrap););
             m_bcrec_density[0].set(ori, BCType::foextrap);
             for (auto& b : m_bcrec_tracer) { b.set(ori, BCType::foextrap); }
+            m_bcrec_temperature[0].set(ori, BCType::foextrap);
         }
         else
         {
@@ -231,6 +254,7 @@ void incflo::init_bcs ()
                              m_bcrec_velocity[2].set(ori, BCType::int_dir););
                 m_bcrec_density[0].set(ori, BCType::int_dir);
                 for (auto& b : m_bcrec_tracer) { b.set(ori, BCType::int_dir); }
+                m_bcrec_temperature[0].set(ori, BCType::int_dir);
             } else {
                 amrex::Abort("Wrong BC type for periodic boundary");
             }
@@ -285,7 +309,8 @@ void incflo::init_bcs ()
 #else
     std::memcpy
 #endif
-        (m_bcrec_density_d.data(), m_bcrec_density.data(), sizeof(BCRec));
+            (m_bcrec_density_d.data(), m_bcrec_density.data(), sizeof(BCRec));
+    }
 
     if (m_ntrac > 0)
     {
@@ -296,6 +321,16 @@ void incflo::init_bcs ()
         std::memcpy
 #endif
             (m_bcrec_tracer_d.data(), m_bcrec_tracer.data(), sizeof(BCRec)*m_ntrac);
+    }
+
+    if (m_use_temperature) {
+        m_bcrec_temperature_d.resize(1);
+#ifdef AMREX_USE_GPU
+        Gpu::htod_memcpy
+#else
+        std::memcpy
+#endif
+            (m_bcrec_temperature_d.data(), m_bcrec_temperature.data(), sizeof(BCRec));
     }
 
     // force
