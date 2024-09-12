@@ -109,7 +109,7 @@ void incflo::ApplyPredictor (bool incremental_projection)
         vel_forces.emplace_back(grids[lev], dmap[lev], AMREX_SPACEDIM, nghost_force(),
                                 MFInfo(), Factory(lev));
         vel_eta.emplace_back(grids[lev], dmap[lev], 1, 1, MFInfo(), Factory(lev));
-        
+
         if (m_advect_tracer) {
             tra_forces.emplace_back(grids[lev], dmap[lev], m_ntrac, nghost_force(),
                                     MFInfo(), Factory(lev));
@@ -118,7 +118,7 @@ void incflo::ApplyPredictor (bool incremental_projection)
         if (m_use_temperature) {
             T_forces.emplace_back(grids[lev], dmap[lev], 1, nghost_force(),
                                     MFInfo(), Factory(lev));
-            T_eta.emplace_back(grids[lev], dmap[lev], 1, 1, MFInfo(), Factory(lev));        
+            T_eta.emplace_back(grids[lev], dmap[lev], 1, 1, MFInfo(), Factory(lev));
         }
     }
 
@@ -154,7 +154,7 @@ void incflo::ApplyPredictor (bool incremental_projection)
         compute_temperature_diff_coeff(GetVecOfPtrs(T_eta),T_eta[0].nComp());
         if (need_divtau()) {
             compute_laps(get_laps_T_old(), get_temperature_old_const(), GetVecOfConstPtrs(T_eta));
-            // Mulitply by rho cp
+            // Multiply by rho cp
         }
     }
 

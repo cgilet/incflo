@@ -845,8 +845,6 @@ private:
         return m_bcrec_density_d.data(); }
     [[nodiscard]] amrex::BCRec const* get_tracer_bcrec_device_ptr () const noexcept {
         return m_bcrec_tracer_d.data(); }
-    [[nodiscard]] amrex::BCRec const* get_tracer_bcrec_device_ptr () const noexcept {
-        return m_bcrec_tracer_d.data(); }
     [[nodiscard]] amrex::BCRec const* get_temperature_bcrec_device_ptr () const noexcept {
         return m_bcrec_temperature_d.data(); }
     [[nodiscard]] amrex::BCRec const* get_force_bcrec_device_ptr () const noexcept {
