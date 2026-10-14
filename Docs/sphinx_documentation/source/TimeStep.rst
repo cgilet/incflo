@@ -64,16 +64,19 @@ we no longer need the predictor and corrector steps.
 
 -  Define the time-centered face-centered (staggered) MAC velocity which is used for advection: :math:`U^{MAC,n+1/2}`
 
--  Define the new-time density, :math:`\rho^{n+1} = \rho^n - \Delta t (\rho^{n+1/2,pred} U^{MAC,n+1/2})` by setting
+-  Define the new-time density, :math:`\rho^{n+1} = \rho^n - \Delta t \nabla \cdot (\rho^{n+1/2,pred} U^{MAC,n+1/2})`
 
 -  Define an approximation to the new-time state, :math:`(\rho U)^{\ast}` by setting
 
    .. math:: (\rho^{n+1} U^{\ast}) &= (\rho^n U^n) -
            \Delta t \left( \nabla \cdot (\rho U^{MAC} U) + \nabla {p}^{n-1/2} \right)  \\
-           &+ \frac{\Delta t}{2} ( \nabla \cdot \tau^n +  \nabla \cdot \tau^\ast)
+           &+ \Delta t \; \nabla \cdot \tau^\ast
             + \Delta t \; \rho^{n+1/2} {\bf H}_U
 
-   (for implicit diffusion, which is the current default)
+   for implicit diffusion, which is the current default. For Crank-Nicolson diffusion
+   (``incflo.diffusion_type = 1``), :math:`\Delta t \; \nabla \cdot \tau^\ast` is replaced by
+   :math:`\frac{\Delta t}{2} ( \nabla \cdot \tau^n + \nabla \cdot \tau^\ast )`, and for explicit
+   diffusion (``incflo.diffusion_type = 0``) by :math:`\Delta t \; \nabla \cdot \tau^n`.
 
 -  Project :math:`U^{\ast}` by solving
 

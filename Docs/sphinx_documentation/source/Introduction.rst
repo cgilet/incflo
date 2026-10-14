@@ -2,7 +2,7 @@ Introduction
 ============
 
 incflo is a massively parallel code for solving the incompressible Navier-Stokes
-equations in 2-D or 3-D,  with the option for an embedded boundary (cut cell) representation of
+equations in 2-D or 3-D,  with the option for an embedded boundary (cut cell) representation
 of complex geometries.
 
 It is built on top of :ref:`AMReX <amrex:amrex_doc_indx>`, a publicly available software framework designed for building
@@ -16,7 +16,8 @@ Navier-Stokes equations in 2-D or 3-D but is based on a subcycling-in-time appro
 
 Key software and algorithmic features of incflo include:
 
--  Fluid velocity, density and tracers are defined at cell centroids; pressure is defined at nodes.
+-  Fluid velocity, density and tracers are defined at cell centroids; pressure is defined at nodes
+   (or at cell centers with ``incflo.use_cc_proj = 1``).
 
 -  Possible advection algorithms: a Method-Of-Lines (MOL) approach and a Godunov-method algorithm.
    Both use an intermediate MAC projection for face-centered advection velocities
@@ -27,9 +28,9 @@ Key software and algorithmic features of incflo include:
 
 -  The representation of the complex geometry uses the embedded boundary, or cut-cell, approach
 
--  Hybrid parallelization via MPI+X where X = OpenMP for multicore machines, and CUDA/HIP/DCP++ for CPU/GPU systems
+-  Hybrid parallelization via MPI+X where X = OpenMP for multicore machines, and CUDA/HIP/SYCL for CPU/GPU systems
 
--  Parallel I/O using AMReX native I/O or HDF5.
+-  Parallel I/O using AMReX native I/O.
 
 -  Plotfile format supported by AmrVis, VisIt, ParaView, and yt.
 

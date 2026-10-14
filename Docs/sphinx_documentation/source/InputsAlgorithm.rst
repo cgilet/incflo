@@ -24,16 +24,16 @@ The following inputs must be preceded by "incflo."
 +----------------------+-----------------------------------------------------------------------+-------------+--------------+
 |  ro_0                |  density (if constant)                                                |  Real       |  1.0         |
 +----------------------+-----------------------------------------------------------------------+-------------+--------------+
-|  diffusion_type      |  Diffusion type (0 = Explicit, 1 = Crank-Nicholson, 2 = Implicit)     |       int   | 2 (Implicit) |
+|  diffusion_type      |  Diffusion type (0 = Explicit, 1 = Crank-Nicolson, 2 = Implicit)      |       int   | 2 (Implicit) |
 +----------------------+-----------------------------------------------------------------------+-------------+--------------+
 |  mu                  |  viscosity (if constant)                                              |  Real       |  1.0         |
 +----------------------+-----------------------------------------------------------------------+-------------+--------------+
 |  mu_s                |  scalar diffusivity                                                   |  Real(s)    |  0.0         |
 +----------------------+-----------------------------------------------------------------------+-------------+--------------+
-|  mu_T                |  thermal conductivity                                                 |  Real(s)    |  0.0         |
+|  mu_T                |  thermal conductivity                                                 |  Real       |  0.0         |
 +----------------------+-----------------------------------------------------------------------+-------------+--------------+
 |  use_cc_proj         |  Use cell-centered rather than nodal pressure; this changes the       |  bool       | false        |
-|                      |  which approximate projection we use                                  |             |              |
+|                      |  approximate projection we use                                        |             |              |
 +----------------------+-----------------------------------------------------------------------+-------------+--------------+
 |  use_tensor_solve    |  In velocity solve, use multicomponent :math:`\nabla \cdot \tau`      |  bool       |  true        |
 |                      |  otherwise use separate solves for each velocity component            |             |              |
