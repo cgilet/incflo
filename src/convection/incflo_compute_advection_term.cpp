@@ -606,7 +606,12 @@ incflo::compute_convective_term (Vector<MultiFab*> const& conv_u,
         {
             Box const& bx = mfi.tilebox();
 
-            Array4<Real const> const& divu_arr = divu[lev].const_array(mfi);
+            // The edge-state prediction uses S^(n+1/2) when div(u) = S, as IAMR does: it is
+            // filled in the ghost cells at the coarse/fine boundary, where divu is zero.
+            // The convective form below still uses div(u_mac).
+            Array4<Real const> const& divu_arr = (m_use_divu_source)
+                ? m_leveldata[lev]->divu_source_nph.const_array(mfi)
+                : divu[lev].const_array(mfi);
 
             // ************************************************************************
             // Velocity
