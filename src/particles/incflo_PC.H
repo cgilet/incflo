@@ -163,6 +163,10 @@ class incflo_PC : public amrex::ParticleContainer<  incflo_ParticlesRealIdxAoS::
 #endif
                                                           );
 
+        /*! Remove the particles on a level that are outside the cylinder given by
+         *  the <name>.cylinder inputs (does nothing if no cylinder is given) */
+        void removeParticlesOutsideCylinder (int a_lev);
+
     protected:
 
         bool m_advect_w_flow;               /*!< advect with flow velocity */
@@ -173,6 +177,10 @@ class incflo_PC : public amrex::ParticleContainer<  incflo_ParticlesRealIdxAoS::
 
         std::string m_initialization_type;  /*!< initial particle distribution type */
         int m_ppc_init;                     /*!< initial number of particles per cell */
+
+        amrex::Real m_cyl_radius = -1.;     /*!< remove particles outside this cylinder if > 0 */
+        amrex::GpuArray<amrex::Real,AMREX_SPACEDIM> m_cyl_center{}; /*!< point on the cylinder axis */
+        int m_cyl_direction = 2;            /*!< direction of the cylinder axis */
 
         /*! read inputs from file */
         virtual void readInputs ();

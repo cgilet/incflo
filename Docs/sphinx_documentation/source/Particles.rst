@@ -76,7 +76,8 @@ Cylinder constraint
 The particle framework includes an optional cylinder constraint that removes particles that leave a
 specified cylindrical region. It is a demonstration of how to keep particles inside a region of interest
 (e.g., flow in a cylinder) and is controlled by the following inputs, which must be preceded by
-"cylinder":
+"tracer_particles.cylinder". They are separate from the inputs of the EB cylinder geometry
+(``cylinder.*``), so the constraint is only used when it is asked for.
 
 +---------------+-----------------------------------------------------------------------+-----------------+--------------+
 |               | Description                                                           |      Type       | Default      |
@@ -85,9 +86,10 @@ specified cylindrical region. It is a demonstration of how to keep particles ins
 |               | value greater than zero, particles outside the cylinder are removed   |                 |              |
 |               | at initialization and after each advection step.                      |                 |              |
 +---------------+-----------------------------------------------------------------------+-----------------+--------------+
-| center        | Coordinates of a point on the cylinder axis.                          |  Vector<Real>   | none         |
+| center        | Coordinates of a point on the cylinder axis (one per dimension).      |  Vector<Real>   | none         |
 +---------------+-----------------------------------------------------------------------+-----------------+--------------+
-| direction     | Axis along which the cylinder is oriented: 0 = x, 1 = y, 2 = z.       |      Int        | none         |
+| direction     | Axis along which the cylinder is oriented: 0 = x, 1 = y, 2 = z. In    |      Int        | none         |
+|               | 2D, 2 gives a disk and 0 or 1 a slab.                                 |                 |              |
 +---------------+-----------------------------------------------------------------------+-----------------+--------------+
 
 Initialization
@@ -103,7 +105,7 @@ distribution in a box (``initial_distribution_type = box``), which is implemente
 - If incflo is built with embedded boundary support, particles are only placed in cells with a non-zero
   volume fraction.
 - All particles are initialized with zero velocity and a mass of :math:`10^{-6}`.
-- If the cylinder inputs are present, particles lying outside the cylinder are removed immediately after
+- If the cylinder constraint is used, particles lying outside the cylinder are removed immediately after
   initialization.
 
 Advection

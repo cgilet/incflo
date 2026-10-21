@@ -145,75 +145,11 @@ void incflo_PC::AdvectWithFlow (int                                 a_lev,
         }
     }
 
-    ParmParse pp("cylinder");
-
-    Real cyl_radius = -1.;
-    pp.query("radius",cyl_radius);
-
     //
-    // The code below is for the specific problem of flow inside a cylinder
+    // For example for flow inside a cylinder: remove the particles that have
+    // left the region of interest
     //
-    // This is just one possible problem set-up but demonstrates how to remove
-    // particles if they leave a specified region.
-    //
-    if (cyl_radius > 0.) {
-        Array<Real,AMREX_SPACEDIM> cyl_center;
-        pp.get("center",cyl_center);
-        Real x_ctr = cyl_center[0];
-        Real y_ctr = cyl_center[1];
-#if (AMREX_SPACEDIM == 3)
-        Real z_ctr = cyl_center[2];
-#endif
-
-        int cyl_direction;
-        pp.get("direction",cyl_direction);
-        AMREX_ALWAYS_ASSERT(cyl_direction >= 0 && cyl_direction <= 2);
-
-        // Remove particles that are outside of the cylindner
-        for (ParIterType pti(*this, a_lev); pti.isValid(); ++pti)
-        {
-            auto& ptile = ParticlesAt(a_lev, pti);
-            auto& aos  = ptile.GetArrayOfStructs();
-            const int n = aos.numParticles();
-            auto *p_pbox = aos().data();
-
-            ParallelFor(n, [=] AMREX_GPU_DEVICE (int i)
-            {
-                ParticleType& p = p_pbox[i];
-
-                Real x =  p.pos(0) - x_ctr;
-                Real y =  p.pos(1) - y_ctr;
-#if (AMREX_SPACEDIM == 3)
-                Real z =  p.pos(2) - z_ctr;
-#endif
-
-                //
-                // Distance from the axis of the cylinder; in 2D directions 0 and 1
-                // define a slab, matching amrex::EB2::CylinderIF in 2D.
-                //
-                Real r = 0.;
-                if (cyl_direction == 2) {
-                    r =  std::sqrt(x*x + y*y);
-#if (AMREX_SPACEDIM == 3)
-                } else if (cyl_direction == 1) {
-                    r =  std::sqrt(x*x + z*z);
-                } else {
-                    r =  std::sqrt(y*y + z*z);
-                }
-#else
-                } else if (cyl_direction == 1) {
-                    r =  std::abs(x);
-                } else {
-                    r =  std::abs(y);
-                }
-#endif
-
-                if (r > cyl_radius) {
-                    p.id() = -1;
-                }
-            });
-        }
-    } // cyl_radius > 0
+    removeParticlesOutsideCylinder(a_lev);
 
     if (m_verbose > 1)
     {
@@ -229,6 +165,63 @@ void incflo_PC::AdvectWithFlow (int                                 a_lev,
 #ifdef AMREX_LAZY
         });
 #endif
+    }
+}
+
+/*! Remove the particles on a level that are outside the cylinder given by the
+ *  <name>.cylinder inputs (does nothing if no cylinder is given) */
+void incflo_PC::removeParticlesOutsideCylinder (int a_lev)
+{
+    BL_PROFILE("incflo_PC::removeParticlesOutsideCylinder()");
+
+    if (m_cyl_radius <= 0.) { return; }
+
+    const Real cyl_radius = m_cyl_radius;
+    const int cyl_direction = m_cyl_direction;
+    const auto cyl_center = m_cyl_center;
+
+    for (ParIterType pti(*this, a_lev); pti.isValid(); ++pti)
+    {
+        auto& ptile = ParticlesAt(a_lev, pti);
+        auto& aos  = ptile.GetArrayOfStructs();
+        const int n = aos.numParticles();
+        auto *p_pbox = aos().data();
+
+        ParallelFor(n, [=] AMREX_GPU_DEVICE (int i)
+        {
+            ParticleType& p = p_pbox[i];
+
+            Real x =  p.pos(0) - cyl_center[0];
+            Real y =  p.pos(1) - cyl_center[1];
+#if (AMREX_SPACEDIM == 3)
+            Real z =  p.pos(2) - cyl_center[2];
+#endif
+
+            //
+            // Distance from the axis of the cylinder; in 2D directions 0 and 1
+            // define a slab, matching amrex::EB2::CylinderIF in 2D.
+            //
+            Real r = 0.;
+            if (cyl_direction == 2) {
+                r =  std::sqrt(x*x + y*y);
+#if (AMREX_SPACEDIM == 3)
+            } else if (cyl_direction == 1) {
+                r =  std::sqrt(x*x + z*z);
+            } else {
+                r =  std::sqrt(y*y + z*z);
+            }
+#else
+            } else if (cyl_direction == 1) {
+                r =  std::abs(x);
+            } else {
+                r =  std::abs(y);
+            }
+#endif
+
+            if (r > cyl_radius) {
+                p.id() = -1;
+            }
+        });
     }
 }
 #endif

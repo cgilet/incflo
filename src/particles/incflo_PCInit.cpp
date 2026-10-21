@@ -45,6 +45,21 @@ void incflo_PC::readInputs ()
 
     m_advect_w_flow = (m_name == incfloParticleNames::tracers ? true : false);
     pp.query("advect_with_flow", m_advect_w_flow);
+
+    // Optional cylinder outside of which particles are removed. It has its own
+    // prefix so that the EB cylinder geometry (cylinder.*) does not turn it on.
+    ParmParse pp_cyl(m_name + ".cylinder");
+    pp_cyl.query("radius", m_cyl_radius);
+    if (m_cyl_radius > 0.) {
+        Vector<Real> cyl_center(AMREX_SPACEDIM);
+        pp_cyl.getarr("center", cyl_center, 0, AMREX_SPACEDIM);
+        for (int i = 0; i < AMREX_SPACEDIM; i++) { m_cyl_center[i] = cyl_center[i]; }
+
+        // In 2D, direction 2 gives a disk and directions 0 and 1 a slab, as in
+        // amrex::EB2::CylinderIF
+        pp_cyl.get("direction", m_cyl_direction);
+        AMREX_ALWAYS_ASSERT(m_cyl_direction >= 0 && m_cyl_direction <= 2);
+    }
 }
 
 /*! Initialize particles in domain */
@@ -221,60 +236,7 @@ void incflo_PC::initializeParticlesUniformDistributionInBox ( const RealBox& par
         }
     }
 
-    ParmParse pp("cylinder");
-
-    if ( pp.contains("radius") ) {
-        Real cyl_radius;
-        pp.get("radius",cyl_radius);
-
-        Array<Real,3> cyl_center;
-        pp.get("center",cyl_center);
-        Real x_ctr = cyl_center[0];
-        Real y_ctr = cyl_center[1];
-#if (AMREX_SPACEDIM == 3)
-        Real z_ctr = cyl_center[2];
-#endif
-
-        // The cylinder axis matters here exactly as it does in AdvectWithFlow,
-        // which accepts 0, 1 and 2 in both 2D and 3D; the culling below must
-        // use the same distance for each direction.
-        int cyl_direction;
-        pp.get("direction",cyl_direction);
-        AMREX_ALWAYS_ASSERT(cyl_direction >= 0 && cyl_direction <= 2);
-
-        // Remove particles that are outside of the cylinder
-        for (ParIterType pti(*this, lev); pti.isValid(); ++pti)
-        {
-            auto& ptile = ParticlesAt(lev, pti);
-            auto& aos  = ptile.GetArrayOfStructs();
-            const int n = aos.numParticles();
-            auto *p_pbox = aos().data();
-
-            ParallelFor(n, [=] AMREX_GPU_DEVICE (int i)
-            {
-                ParticleType& p = p_pbox[i];
-
-                Real x =  p.pos(0) - x_ctr;
-                Real y =  p.pos(1) - y_ctr;
-#if (AMREX_SPACEDIM == 3)
-                Real z =  p.pos(2) - z_ctr;
-                Real r = (cyl_direction == 0) ? std::sqrt(y*y + z*z)
-                       : (cyl_direction == 1) ? std::sqrt(x*x + z*z)
-                                              : std::sqrt(x*x + y*y);
-#else
-                // Same convention as AdvectWithFlow and amrex::EB2::CylinderIF:
-                // direction 2 is a disk, directions 0 and 1 are slabs.
-                Real r = (cyl_direction == 2) ? std::sqrt(x*x + y*y)
-                       : (cyl_direction == 1) ? std::abs(x)
-                                              : std::abs(y);
-#endif
-
-                if (r > cyl_radius) {
-                    p.id() = -1;
-                }
-            });
-        }
-    }
+    removeParticlesOutsideCylinder(lev);
 }
 
 #endif
