@@ -1,5 +1,6 @@
 #include <incflo.H>
 #include <prob_divu_channel.H>
+#include <prob_divu_mms.H>
 
 using namespace amrex;
 
@@ -43,6 +44,28 @@ void incflo::prob_divu_source (int lev, MultiFab& divu_source, Real time) const
     {
         // Uniform S = 1 + sin(2 pi t)/2 (prob_divu_channel.H)
         divu_source.setVal(incflo_divu_channel_S(time));
+    }
+    else if (604 == m_probtype)
+    {
+        // The divergence of the steady manufactured velocity (prob_divu_mms.H)
+        Real const mu = m_mu;
+        Real const ro_0 = m_ro_0;
+        for (MFIter mfi(divu_source, TilingIfNotGPU()); mfi.isValid(); ++mfi)
+        {
+            Box const& bx = mfi.tilebox();
+            Array4<Real> const& S = divu_source.array(mfi);
+            ParallelFor(bx, [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept
+            {
+                IntVect const iv(AMREX_D_DECL(i,j,k));
+                GpuArray<Real,AMREX_SPACEDIM> x;
+                for (int d = 0; d < AMREX_SPACEDIM; ++d) {
+                    x[d] = problo[d] + (Real(iv[d]) + Real(0.5)) * dx[d];
+                }
+                IncfloDivuMMS r;
+                incflo_divu_mms(x, problo, probhi, mu, ro_0, r);
+                S(i,j,k) = r.S;
+            });
+        }
     }
     else if (605 == m_probtype)
     {

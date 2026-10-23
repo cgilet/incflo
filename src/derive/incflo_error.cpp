@@ -3,6 +3,7 @@
 #include <incflo.H>
 #include <incflo_derive_K.H>
 #include <prob_divu_channel.H>
+#include <prob_divu_mms.H>
 
 using namespace amrex;
 
@@ -220,6 +221,35 @@ void incflo::DiffFromExact (int /*lev*/, Geometry& lev_geom, Real time, Real dt,
                     exact = varying ? incflo_divu_channel_tracer(xr, L, time) : ic_t;
                 }
                 err(i,j,k,soln_comp) -= exact;
+            });
+        }
+
+    // Steady manufactured solution with div(u) = S (prob_divu_mms.H): velocity and
+    // pressure.  The exact pressure has zero mean, as error_p assumes.
+    } else if (604 == m_probtype) {
+        if (err_comp == AMREX_SPACEDIM+1) {
+            amrex::Abort("No exact MAC pressure implemented for incflo.probtype = 604");
+        }
+        auto const& probhi = lev_geom.ProbHiArray();
+        Real const mu = m_mu;
+        Real const ro_0 = m_ro_0;
+        for(MFIter mfi(error, TilingIfNotGPU()); mfi.isValid(); ++mfi)
+        {
+            Box bx = mfi.tilebox();
+
+            // When we enter this routine, this holds the computed solution
+            Array4<Real> const& err = error.array(mfi);
+
+            ParallelFor(bx, [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept
+            {
+                IntVect const iv(AMREX_D_DECL(i,j,k));
+                GpuArray<Real,AMREX_SPACEDIM> x;
+                for (int d = 0; d < AMREX_SPACEDIM; ++d) {
+                    x[d] = problo[d] + (Real(iv[d]) + Real(0.5)) * dx[d];
+                }
+                IncfloDivuMMS r;
+                incflo_divu_mms(x, problo, probhi, mu, ro_0, r);
+                err(i,j,k,soln_comp) -= (err_comp < AMREX_SPACEDIM) ? r.vel[err_comp] : r.p;
             });
         }
     } else {

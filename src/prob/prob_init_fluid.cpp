@@ -1,5 +1,6 @@
 #include <incflo.H>
 #include <prob_divu_channel.H>
+#include <prob_divu_mms.H>
 
 using namespace amrex;
 
@@ -34,6 +35,16 @@ void incflo::prob_init_fluid (int lev)
         ld.temperature.setVal(m_ic_tem);
     }
 
+    // The forcing of the manufactured solution assumes these
+    if (604 == m_probtype) {
+        if (!m_use_divu_source || !m_constant_density ||
+            m_fluid_model != FluidModel::Newtonian || !use_tensor_solve) {
+            amrex::Abort("incflo.probtype = 604 requires incflo.use_divu_source = 1, "
+                         "incflo.constant_density = 1, a Newtonian fluid and "
+                         "incflo.use_tensor_solve = 1");
+        }
+    }
+
     for (MFIter mfi(ld.density); mfi.isValid(); ++mfi)
     {
         const Box& vbx = mfi.validbox();
@@ -53,6 +64,14 @@ void incflo::prob_init_fluid (int lev)
                               ld.density.array(mfi),
                               ld.tracer.array(mfi),
                               domain, dx, problo, probhi);
+        }
+        else if (604 == m_probtype)
+        {
+            init_divu_mms(vbx, gbx,
+                          ld.velocity.array(mfi),
+                          ld.density.array(mfi),
+                          ld.tracer.array(mfi),
+                          domain, dx, problo, probhi);
         }
         else if (605 == m_probtype)
         {
@@ -1237,6 +1256,34 @@ void incflo::init_divu_channel (Box const& vbx, Box const& /*gbx*/,
         density(i,j,k) = incflo_divu_channel_density(xr, L, Real(0.0), ro_0);
         if (has_tracer) {
             tracer(i,j,k,0) = incflo_divu_channel_tracer(xr, L, Real(0.0));
+        }
+    });
+}
+
+void incflo::init_divu_mms (Box const& vbx, Box const& /*gbx*/,
+                            Array4<Real> const& vel,
+                            Array4<Real> const& /*density*/,
+                            Array4<Real> const& /*tracer*/,
+                            Box const& /*domain*/,
+                            GpuArray<Real, AMREX_SPACEDIM> const& dx,
+                            GpuArray<Real, AMREX_SPACEDIM> const& problo,
+                            GpuArray<Real, AMREX_SPACEDIM> const& probhi) const
+{
+    // The steady manufactured velocity (prob_divu_mms.H)
+    Real const mu = m_mu;
+    Real const ro_0 = m_ro_0;
+
+    ParallelFor(vbx, [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept
+    {
+        IntVect const iv(AMREX_D_DECL(i,j,k));
+        GpuArray<Real,AMREX_SPACEDIM> x;
+        for (int d = 0; d < AMREX_SPACEDIM; ++d) {
+            x[d] = problo[d] + (Real(iv[d]) + Real(0.5)) * dx[d];
+        }
+        IncfloDivuMMS r;
+        incflo_divu_mms(x, problo, probhi, mu, ro_0, r);
+        for (int d = 0; d < AMREX_SPACEDIM; ++d) {
+            vel(i,j,k,d) = r.vel[d];
         }
     });
 }
