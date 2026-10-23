@@ -1,4 +1,5 @@
 #include <incflo.H>
+#include <prob_divu_channel.H>
 
 using namespace amrex;
 
@@ -43,6 +44,15 @@ void incflo::prob_init_fluid (int lev)
         {
             // div(u) = S tests: the flow comes from the initial projection with S
             // (prob_divu_source), so the defaults are all we need
+        }
+        else if (603 == m_probtype)
+        {
+            // The velocity comes from the initial projection, as for 602
+            init_divu_channel(vbx, gbx,
+                              ld.velocity.array(mfi),
+                              ld.density.array(mfi),
+                              ld.tracer.array(mfi),
+                              domain, dx, problo, probhi);
         }
         else if (605 == m_probtype)
         {
@@ -1203,6 +1213,31 @@ void incflo::init_burggraf (Box const& vbx, Box const& /*gbx*/,
 #if (AMREX_SPACEDIM == 3)
         vel(i,j,k,2) = Real(0);
 #endif
+    });
+}
+
+void incflo::init_divu_channel (Box const& vbx, Box const& /*gbx*/,
+                                Array4<Real> const& /*vel*/,
+                                Array4<Real> const& density,
+                                Array4<Real> const& tracer,
+                                Box const& /*domain*/,
+                                GpuArray<Real, AMREX_SPACEDIM> const& dx,
+                                GpuArray<Real, AMREX_SPACEDIM> const& problo,
+                                GpuArray<Real, AMREX_SPACEDIM> const& probhi) const
+{
+    // The exact solution at t = 0 (prob_divu_channel.H)
+    Real const xc = Real(0.5) * (problo[0] + probhi[0]);
+    Real const L = probhi[0] - problo[0];
+    Real const ro_0 = m_ro_0;
+    bool const has_tracer = (m_ntrac > 0);
+
+    ParallelFor(vbx, [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept
+    {
+        Real const xr = problo[0] + (Real(i) + Real(0.5)) * dx[0] - xc;
+        density(i,j,k) = incflo_divu_channel_density(xr, L, Real(0.0), ro_0);
+        if (has_tracer) {
+            tracer(i,j,k,0) = incflo_divu_channel_tracer(xr, L, Real(0.0));
+        }
     });
 }
 

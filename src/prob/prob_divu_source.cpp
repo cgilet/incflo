@@ -1,4 +1,5 @@
 #include <incflo.H>
+#include <prob_divu_channel.H>
 
 using namespace amrex;
 
@@ -37,6 +38,11 @@ void incflo::prob_divu_source (int lev, MultiFab& divu_source, Real time) const
     {
         // Uniform S = 1
         divu_source.setVal(Real(1.0));
+    }
+    else if (603 == m_probtype)
+    {
+        // Uniform S = 1 + sin(2 pi t)/2 (prob_divu_channel.H)
+        divu_source.setVal(incflo_divu_channel_S(time));
     }
     else if (605 == m_probtype)
     {

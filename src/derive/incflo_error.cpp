@@ -2,6 +2,7 @@
 
 #include <incflo.H>
 #include <incflo_derive_K.H>
+#include <prob_divu_channel.H>
 
 using namespace amrex;
 
@@ -10,6 +11,12 @@ void incflo::DiffFromExact (int /*lev*/, Geometry& lev_geom, Real time, Real dt,
 {
     auto const& dx = lev_geom.CellSizeArray();
     auto const& problo = lev_geom.ProbLoArray();
+
+    // err_comp: 0 to AMREX_SPACEDIM-1 velocity, AMREX_SPACEDIM pressure, AMREX_SPACEDIM+1
+    // MAC pressure, AMREX_SPACEDIM+2 density, AMREX_SPACEDIM+3 the first tracer
+    if (err_comp >= AMREX_SPACEDIM+2 && m_probtype != 602 && m_probtype != 603) {
+        amrex::Abort("error_density and error_tracer are only implemented for incflo.probtype = 602 and 603");
+    }
 
     // Taylor-Green vortices
     if (1 == m_probtype)
@@ -173,11 +180,26 @@ void incflo::DiffFromExact (int /*lev*/, Geometry& lev_geom, Real time, Real dt,
             });
         }
 
-    // div(u) = 1 in a channel with outflow at both ends in x: u = x - x_center.
-    // Only the velocity is checked.
-    } else if (602 == m_probtype) {
+    // div(u) = S(t) in a channel with outflow at both ends in x: u = S(t) (x - x_center),
+    // with S = 1 (602) or S = 1 + sin(2 pi t)/2 (603).  The density and the first tracer
+    // are uniform for 602 and follow prob_divu_channel.H for 603.
+    } else if (602 == m_probtype || 603 == m_probtype) {
+        if (err_comp == AMREX_SPACEDIM || err_comp == AMREX_SPACEDIM+1) {
+            amrex::Abort("No exact pressure implemented for incflo.probtype = 602 or 603");
+        }
+        if (err_comp >= AMREX_SPACEDIM+2 && m_constant_density) {
+            amrex::Abort("error_density and error_tracer for incflo.probtype = 602 and 603 need incflo.constant_density = 0");
+        }
+        if (err_comp == AMREX_SPACEDIM+3 && m_ntrac < 1) {
+            amrex::Abort("error_tracer needs a tracer");
+        }
         auto const& probhi = lev_geom.ProbHiArray();
         Real const xc = Real(0.5) * (problo[0] + probhi[0]);
+        Real const L = probhi[0] - problo[0];
+        bool const varying = (603 == m_probtype);
+        Real const S = varying ? incflo_divu_channel_S(time) : Real(1.0);
+        Real const ro_0 = m_ro_0;
+        Real const ic_t = (m_ntrac > 0) ? m_ic_t[0] : Real(0.0);
         for(MFIter mfi(error, TilingIfNotGPU()); mfi.isValid(); ++mfi)
         {
             Box bx = mfi.tilebox();
@@ -187,9 +209,15 @@ void incflo::DiffFromExact (int /*lev*/, Geometry& lev_geom, Real time, Real dt,
 
             ParallelFor(bx, [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept
             {
+                Real const xr = problo[0] + Real(i+0.5)*dx[0] - xc;
                 Real exact = Real(0.0);
                 if (err_comp == 0) {
-                    exact = problo[0] + Real(i+0.5)*dx[0] - xc;
+                    exact = S * xr;
+                } else if (err_comp == AMREX_SPACEDIM+2) {
+                    exact = varying ? incflo_divu_channel_density(xr, L, time, ro_0)
+                                    : ro_0 * std::exp(-time);
+                } else if (err_comp == AMREX_SPACEDIM+3) {
+                    exact = varying ? incflo_divu_channel_tracer(xr, L, time) : ic_t;
                 }
                 err(i,j,k,soln_comp) -= exact;
             });
