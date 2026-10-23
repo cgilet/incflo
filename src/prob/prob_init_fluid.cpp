@@ -44,6 +44,14 @@ void incflo::prob_init_fluid (int lev)
             // div(u) = S tests: the flow comes from the initial projection with S
             // (prob_divu_source), so the defaults are all we need
         }
+        else if (605 == m_probtype)
+        {
+            init_divu_plume(vbx, gbx,
+                            ld.velocity.array(mfi),
+                            ld.density.array(mfi),
+                            ld.tracer.array(mfi),
+                            domain, dx, problo, probhi);
+        }
         else if (1 == m_probtype)
         {
             init_taylor_green(vbx, gbx,
@@ -1195,5 +1203,34 @@ void incflo::init_burggraf (Box const& vbx, Box const& /*gbx*/,
 #if (AMREX_SPACEDIM == 3)
         vel(i,j,k,2) = Real(0);
 #endif
+    });
+}
+
+// probtype 605: a channel along x with a pulsing source of S (prob_divu_source). The
+// velocity and density keep their uniform initial values (incflo.ic_u, incflo.ro_0). Every
+// tracer gets the same bump just upstream of the source, so the conservative and convective
+// forms (incflo.trac_is_conservative) can be compared after it passes the expanding region.
+void incflo::init_divu_plume (Box const& vbx, Box const& /*gbx*/,
+                              Array4<Real> const& /*vel*/,
+                              Array4<Real> const& /*density*/,
+                              Array4<Real> const& tracer,
+                              Box const& /*domain*/,
+                              GpuArray<Real, AMREX_SPACEDIM> const& dx,
+                              GpuArray<Real, AMREX_SPACEDIM> const& problo,
+                              GpuArray<Real, AMREX_SPACEDIM> const& probhi) const
+{
+    // The source is centered at x = 0.25 L_x; the bump is centered 0.075 L_x upstream of it
+    // and is negligible (exp(-34)) at the inflow, where the tracers are 1
+    Real const Lx = probhi[0] - problo[0];
+    Real const xt = problo[0] + Real(0.175) * Lx;
+    Real const w = Real(0.03) * Lx;
+    int const ntrac = m_ntrac;
+    ParallelFor(vbx, [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept
+    {
+        Real const xr = (problo[0] + (Real(i) + Real(0.5)) * dx[0] - xt) / w;
+        Real const s = Real(1.0) + std::exp(-xr * xr);
+        for (int n = 0; n < ntrac; ++n) {
+            tracer(i,j,k,n) = s;
+        }
     });
 }
