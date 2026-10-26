@@ -140,11 +140,26 @@ void incflo::init_bcs ()
             AMREX_D_TERM(m_bcrec_velocity[0].set(ori, BCType::ext_dir);,
                          m_bcrec_velocity[1].set(ori, BCType::ext_dir);,
                          m_bcrec_velocity[2].set(ori, BCType::ext_dir););
-            m_bcrec_density[0].set(ori, BCType::foextrap);
+            // As at slip walls, the density and tracers are extrapolated to the wall at higher
+            // order (except with BDS): with foextrap their advection is only first order next
+            // to the wall wherever the normal velocity grows linearly from it, as it does where
+            // div(u) != 0 at the wall.
+            if (m_advection_type == "BDS") {
+                // BDS requires foextrap to avoid introduction of local max/min
+                m_bcrec_density[0].set(ori, BCType::foextrap);
+            } else {
+                m_bcrec_density[0].set(ori, BCType::hoextrap);
+            }
             if ( pp.contains("tracer") ) {
                 for (auto& b : m_bcrec_tracer) { b.set(ori, BCType::ext_dir); }
             } else {
-                for (auto& b : m_bcrec_tracer) { b.set(ori, BCType::foextrap); }
+                for (auto& b : m_bcrec_tracer) {
+                    if (m_advection_type == "BDS") {
+                        b.set(ori, BCType::foextrap);
+                    } else {
+                        b.set(ori, BCType::hoextrap);
+                    }
+                }
             }
             if ( pp.contains("temperature") ) {
                 for (auto& b : m_bcrec_temperature) { b.set(ori, BCType::ext_dir); }
