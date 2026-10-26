@@ -1,5 +1,5 @@
 #include <incflo.H>
-#include <prob_divu_channel.H>
+#include <prob_divu_ballistic.H>
 #include <prob_divu_mms.H>
 
 using namespace amrex;
@@ -42,8 +42,26 @@ void incflo::prob_divu_source (int lev, MultiFab& divu_source, Real time) const
     }
     else if (603 == m_probtype)
     {
-        // Uniform S = 1 + sin(2 pi t)/2 (prob_divu_channel.H)
-        divu_source.setVal(incflo_divu_channel_S(time));
+        // The ballistic potential flow (prob_divu_ballistic.H)
+        GpuArray<Real,AMREX_SPACEDIM> const U{AMREX_D_DECL(m_ic_u, m_ic_v, m_ic_w)};
+        GpuArray<int,AMREX_SPACEDIM> wall;
+        for (int d = 0; d < AMREX_SPACEDIM; ++d) { wall[d] = geom[lev].isPeriodic(d) ? 0 : 1; }
+        for (MFIter mfi(divu_source, TilingIfNotGPU()); mfi.isValid(); ++mfi)
+        {
+            Box const& bx = mfi.tilebox();
+            Array4<Real> const& S = divu_source.array(mfi);
+            ParallelFor(bx, [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept
+            {
+                IntVect const iv(AMREX_D_DECL(i,j,k));
+                GpuArray<Real,AMREX_SPACEDIM> x;
+                for (int d = 0; d < AMREX_SPACEDIM; ++d) {
+                    x[d] = problo[d] + (Real(iv[d]) + Real(0.5)) * dx[d];
+                }
+                IncfloDivuBallistic r;
+                incflo_divu_ballistic(x, time, U, problo, probhi, wall, r);
+                S(i,j,k) = r.S;
+            });
+        }
     }
     else if (604 == m_probtype)
     {

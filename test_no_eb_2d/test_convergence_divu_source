@@ -1,22 +1,47 @@
 #!/bin/bash
 # Convergence of the div(u) = S tests that have exact solutions, with dx and dt refined
-# together (dt = dx/2).  Run from this directory after building incflo2d.gnu.MPI.ex.
-#   inputs.divu_source_channel_unsteady (incflo.probtype = 603): u is exact to rounding
-#     error.  The errors of the density and the tracer are first order in the max norm, in
-#     the outflow boundary cells, and so about order 1.5 in L2.  Away from the outflow and
-#     in L1 (not printed) they are second order, apart from the max error of the tracer,
-#     which the PPM limiter slows down at the smooth maximum of rho s.
+# together.  Run from this directory after building incflo2d.gnu.MPI.ex.  The Linf and L2
+# norms of the errors at the final time are printed (Norm0 / Norm2).
+#   inputs.divu_source_ballistic (incflo.probtype = 603), periodic: u, v, p, the density and
+#     both tracers converge at second order in L2.  The max errors of the density and the
+#     tracers converge more slowly, where the PPM limiter clips smooth extrema.
+#   The same with two levels and a fixed fine patch over the middle of the domain: the L2
+#     errors converge at second order on both levels.  Along the coarse/fine boundary the
+#     error of p is first order; at the corners of the patch it stops converging and that of
+#     u and v becomes first order, which limits the max errors on the fine level.  This comes
+#     from the nodal projection at the coarse/fine boundary together with the viscous term:
+#     with mu = 0 these errors are about 20 times smaller, and an incompressible flow with
+#     the same mu (the decaying Taylor vortex) also has a first-order p there.
+#   inputs.divu_source_ballistic_walls (603), no-slip walls: u, v and p converge at second
+#     order.  The density and the tracers are first order in the two cells next to the walls
+#     (see the inputs file), so their L2 errors converge at between order 1.5 and 2, and the
+#     max error of the convective tracer, which is largest there, at first order.
 #   inputs.divu_source_mms (incflo.probtype = 604): the errors of u and v are second order.
 #     The pressure is first order next to the no-slip walls (see the inputs file).
+dt() { awk "BEGIN {printf \"%.10g\", $1/$2}"; }
 for n in 32 64 128 256; do
-    dt=$(awk "BEGIN {printf \"%.10g\", 0.5/$n}")
-    ./incflo2d.gnu.MPI.ex inputs.divu_source_channel_unsteady amr.n_cell="$n $((n/2))" incflo.fixed_dt=$dt >& out.channel.$n
-    ./incflo2d.gnu.MPI.ex inputs.divu_source_mms amr.n_cell="$n $n" incflo.fixed_dt=$dt >& out.mms.$n
+    ./incflo2d.gnu.MPI.ex inputs.divu_source_ballistic amr.n_cell="$n $n" incflo.fixed_dt=$(dt 0.5 $n) >& out.ballistic.$n
+    ./incflo2d.gnu.MPI.ex inputs.divu_source_ballistic_walls amr.n_cell="$n $n" incflo.fixed_dt=$(dt 0.5 $n) >& out.walls.$n
+    ./incflo2d.gnu.MPI.ex inputs.divu_source_mms amr.n_cell="$n $n" incflo.fixed_dt=$(dt 0.5 $n) >& out.mms.$n
+done
+for n in 32 64 128; do
+    ./incflo2d.gnu.MPI.ex inputs.divu_source_ballistic amr.n_cell="$n $n" incflo.fixed_dt=$(dt 0.25 $n) \
+        amr.max_level=1 amr.n_error_buf=0 amr.regrid_int=-1 incflo.tag_region=true \
+        incflo.tag_region_lo="0.25 0.25" incflo.tag_region_hi="0.75 0.75" >& out.ballistic_amr.$n
 done
 echo "Norm0 / Norm2 of the errors at the final time"
 for n in 32 64 128 256; do
-    echo "probtype 603, n = $n"
-    grep Norm0 out.channel.$n | tail -4
+    echo "probtype 603, periodic, n = $n"
+    grep Norm0 out.ballistic.$n | tail -6
+done
+for n in 32 64 128; do
+    echo "probtype 603, periodic, two levels, coarse n = $n: u, v, p and the density, each on level 0"
+    echo "and then on level 1; then tracer0 and tracer1 on level 0, and then on level 1"
+    grep Norm0 out.ballistic_amr.$n | tail -12
+done
+for n in 32 64 128 256; do
+    echo "probtype 603, no-slip walls, n = $n"
+    grep Norm0 out.walls.$n | tail -6
 done
 for n in 32 64 128 256; do
     echo "probtype 604, n = $n"

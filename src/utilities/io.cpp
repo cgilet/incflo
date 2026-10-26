@@ -462,7 +462,7 @@ void incflo::WritePlotVariables(Vector<std::string> vars, const std::string& plo
 
     for(int n = 0; n < vars.size(); n++) {
         // Check for options with more than one component
-        if ( vars[n] == "tracer" ) { ncomp += m_ntrac; }
+        if ( vars[n] == "tracer" || vars[n] == "error_tracer" ) { ncomp += m_ntrac; }
         else if ( vars[n] == "forcing" ) { ncomp += AMREX_SPACEDIM; }
 
         // Only include these options if relevant/enabled
@@ -650,16 +650,19 @@ void incflo::WritePlotVariables(Vector<std::string> vars, const std::string& plo
             ++icomp;
         }
         else if (vars[n] == "error_tracer") {
-            int icomp_err_tracer = AMREX_SPACEDIM+3;
             for (int lev = 0; lev <= finest_level; ++lev)
             {
-                MultiFab::Copy(mf[lev], m_leveldata[lev]->tracer, 0, icomp, 1, 0);
-                DiffFromExact(lev, Geom(lev), m_cur_time, m_dt, mf[lev], icomp, icomp_err_tracer);
-                amrex::Print() << "Norm0 / Norm2 of tracer error " <<
-                    mf[lev].norm0(icomp) << " " << mf[lev].norm2(icomp) / std::sqrt(mf[lev].boxArray().numPts()) << "\n";
+                MultiFab::Copy(mf[lev], m_leveldata[lev]->tracer, 0, icomp, m_ntrac, 0);
+                for (int i = 0; i < m_ntrac; ++i) {
+                    DiffFromExact(lev, Geom(lev), m_cur_time, m_dt, mf[lev], icomp+i, AMREX_SPACEDIM+3+i);
+                    amrex::Print() << "Norm0 / Norm2 of tracer" << i << " error " <<
+                        mf[lev].norm0(icomp+i) << " " << mf[lev].norm2(icomp+i) / std::sqrt(mf[lev].boxArray().numPts()) << "\n";
+                }
             }
-            pltscaVarsName.push_back("error_tracer");
-            ++icomp;
+            for (int i = 0; i < m_ntrac; ++i) {
+                pltscaVarsName.push_back("error_tracer"+std::to_string(i));
+            }
+            icomp += m_ntrac;
         }
         else if (vars[n] == "error_p") {
             int icomp_err_p = AMREX_SPACEDIM;

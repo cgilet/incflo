@@ -2,7 +2,7 @@
 # outflow at both ends.  The exact solution is u = x - 1/2, v = 0, and a density that
 # stays uniform, rho = exp(-t).  The tracer is advected in convective form, so it stays
 # exactly 1.  error_u, error_v, error_density and error_tracer hold the differences from
-# the exact solution.  inputs.divu_source_channel_unsteady has an S that varies in time.
+# the exact solution.  inputs.divu_source_ballistic has an S that varies in space and time.
 #
 # With geometry.is_periodic = 1 1 the domain is closed, the projections remove the mean
 # of S, and incflo warns that the integral of S is not zero.

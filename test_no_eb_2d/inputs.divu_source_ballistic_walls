@@ -1,0 +1,49 @@
+# div(u) = S: ballistic potential flow (incflo.probtype = 603, src/prob/prob_divu_ballistic.H)
+# in a box with no-slip walls.  As inputs.divu_source_ballistic, but the potential has a
+# factor sin^2 in each non-periodic direction, so the velocity vanishes on the walls and the
+# walls do not move; U must be zero.  S is not zero on the walls.
+#
+# The velocity and the pressure converge at second order.  The density and the tracers are
+# first order in the two cells next to the walls, and second order elsewhere, mainly because
+# their ghost cells at no-slip walls are filled by first-order extrapolation: since S is not zero
+# on the walls, the normal velocity grows linearly from the walls (with S = 0 it grows
+# quadratically), so the error of that extrapolation reaches the fluxes at first order.
+
+stop_time               =   0.5
+max_step                =   -1
+
+incflo.cfl              =   0.5
+incflo.init_shrink      =   1.0
+
+amr.plot_int            =   100000
+amr.check_int           =   -1
+amr.plotVariables       =   velx vely gpx gpy p density tracer divu_source error_u error_v error_p error_density error_tracer
+
+incflo.use_divu_source  =   1
+
+incflo.constant_density =   0
+incflo.ro_0             =   1.
+incflo.mu               =   0.05
+incflo.diffusion_type   =   1
+incflo.gravity          =   0.  0.
+
+incflo.ntrac            =   2
+incflo.advect_tracer    =   1
+incflo.trac_is_conservative = 1  0
+incflo.mu_s             =   0.  0.
+
+amr.n_cell              =   32  32
+amr.max_level           =   0
+
+geometry.prob_lo        =   0.  0.
+geometry.prob_hi        =   1.  1.
+geometry.is_periodic    =   0   0
+
+xlo.type                =   "nsw"
+xhi.type                =   "nsw"
+ylo.type                =   "nsw"
+yhi.type                =   "nsw"
+
+incflo.probtype         =   603
+
+incflo.verbose          =   1

@@ -1,5 +1,5 @@
 #include <incflo.H>
-#include <prob_divu_channel.H>
+#include <prob_divu_ballistic.H>
 #include <prob_divu_mms.H>
 
 using namespace amrex;
@@ -35,6 +35,10 @@ void incflo::prob_init_fluid (int lev)
         ld.temperature.setVal(m_ic_tem);
     }
 
+    if (603 == m_probtype) {
+        check_divu_ballistic(lev);
+    }
+
     // The forcing of the manufactured solution assumes these
     if (604 == m_probtype) {
         if (!m_use_divu_source || !m_constant_density ||
@@ -58,12 +62,11 @@ void incflo::prob_init_fluid (int lev)
         }
         else if (603 == m_probtype)
         {
-            // The velocity comes from the initial projection, as for 602
-            init_divu_channel(vbx, gbx,
-                              ld.velocity.array(mfi),
-                              ld.density.array(mfi),
-                              ld.tracer.array(mfi),
-                              domain, dx, problo, probhi);
+            init_divu_ballistic(vbx, gbx,
+                                ld.velocity.array(mfi),
+                                ld.density.array(mfi),
+                                ld.tracer.array(mfi),
+                                domain, dx, problo, probhi);
         }
         else if (604 == m_probtype)
         {
@@ -1235,29 +1238,108 @@ void incflo::init_burggraf (Box const& vbx, Box const& /*gbx*/,
     });
 }
 
-void incflo::init_divu_channel (Box const& vbx, Box const& /*gbx*/,
-                                Array4<Real> const& /*vel*/,
-                                Array4<Real> const& density,
-                                Array4<Real> const& tracer,
-                                Box const& /*domain*/,
-                                GpuArray<Real, AMREX_SPACEDIM> const& dx,
-                                GpuArray<Real, AMREX_SPACEDIM> const& problo,
-                                GpuArray<Real, AMREX_SPACEDIM> const& probhi) const
+// probtype 603: the ballistic potential flow (prob_divu_ballistic.H) at t = 0, where the
+// label of each point is the point itself
+void incflo::init_divu_ballistic (Box const& vbx, Box const& /*gbx*/,
+                                  Array4<Real> const& vel,
+                                  Array4<Real> const& density,
+                                  Array4<Real> const& tracer,
+                                  Box const& /*domain*/,
+                                  GpuArray<Real, AMREX_SPACEDIM> const& dx,
+                                  GpuArray<Real, AMREX_SPACEDIM> const& problo,
+                                  GpuArray<Real, AMREX_SPACEDIM> const& probhi) const
 {
-    // The exact solution at t = 0 (prob_divu_channel.H)
-    Real const xc = Real(0.5) * (problo[0] + probhi[0]);
-    Real const L = probhi[0] - problo[0];
+    GpuArray<Real,AMREX_SPACEDIM> const U{AMREX_D_DECL(m_ic_u, m_ic_v, m_ic_w)};
+    GpuArray<int,AMREX_SPACEDIM> wall;
+    for (int d = 0; d < AMREX_SPACEDIM; ++d) { wall[d] = geom[0].isPeriodic(d) ? 0 : 1; }
     Real const ro_0 = m_ro_0;
-    bool const has_tracer = (m_ntrac > 0);
+    bool const evolve_density = !m_constant_density;
+    int const ntrac = m_ntrac;
 
     ParallelFor(vbx, [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept
     {
-        Real const xr = problo[0] + (Real(i) + Real(0.5)) * dx[0] - xc;
-        density(i,j,k) = incflo_divu_channel_density(xr, L, Real(0.0), ro_0);
-        if (has_tracer) {
-            tracer(i,j,k,0) = incflo_divu_channel_tracer(xr, L, Real(0.0));
+        IntVect const iv(AMREX_D_DECL(i,j,k));
+        GpuArray<Real,AMREX_SPACEDIM> x;
+        for (int d = 0; d < AMREX_SPACEDIM; ++d) {
+            x[d] = problo[d] + (Real(iv[d]) + Real(0.5)) * dx[d];
+        }
+        IncfloDivuBallistic r;
+        incflo_divu_ballistic(x, Real(0.0), U, problo, probhi, wall, r);
+        for (int d = 0; d < AMREX_SPACEDIM; ++d) {
+            vel(i,j,k,d) = r.vel[d];
+        }
+        if (evolve_density) {
+            density(i,j,k) = ro_0 * r.rho0;
+        }
+        for (int n = 0; n < ntrac; ++n) {
+            tracer(i,j,k,n) = r.s0;
         }
     });
+}
+
+// probtype 603: the exact solution assumes these.  Also check that the particle paths do not
+// cross before the end of the run (with a 10% margin), where the solution stops existing.
+void incflo::check_divu_ballistic (int lev) const
+{
+    bool has_wall = false;
+    for (int d = 0; d < AMREX_SPACEDIM; ++d) {
+        if (!geom[lev].isPeriodic(d)) {
+            has_wall = true;
+            if (m_bc_type[Orientation(d,Orientation::low)] != BC::no_slip_wall ||
+                m_bc_type[Orientation(d,Orientation::high)] != BC::no_slip_wall) {
+                amrex::Abort("incflo.probtype = 603 needs no-slip walls in the non-periodic directions");
+            }
+        }
+    }
+    bool zero_gravity = true;
+    for (int d = 0; d < AMREX_SPACEDIM; ++d) { zero_gravity = zero_gravity && m_gravity[d] == 0.0; }
+    bool zero_tracer_diffusion = true;
+    if (m_advect_tracer) {
+        for (int n = 0; n < m_ntrac; ++n) { zero_tracer_diffusion = zero_tracer_diffusion && m_mu_s[n] == 0.0; }
+    }
+    if (!m_use_divu_source || m_fluid_model != FluidModel::Newtonian || !zero_gravity ||
+        !zero_tracer_diffusion) {
+        amrex::Abort("incflo.probtype = 603 requires incflo.use_divu_source = 1, a Newtonian fluid, "
+                     "no gravity and no tracer diffusion");
+    }
+    if (has_wall && (m_ic_u != 0.0 || m_ic_v != 0.0 || m_ic_w != 0.0)) {
+        amrex::Abort("incflo.probtype = 603 with walls needs incflo.ic_u = ic_v = ic_w = 0");
+    }
+
+    Real t_end = m_stop_time;
+    if (t_end <= 0.0 && m_fixed_dt > 0.0 && m_max_step > 0) { t_end = m_max_step * m_fixed_dt; }
+    if (t_end <= 0.0) {
+        amrex::Print() << "WARNING: incflo.probtype = 603: cannot check that the particle paths "
+                       << "do not cross before the end of the run\n";
+        return;
+    }
+    Real const t_check = Real(1.1) * t_end;
+    auto const& dx = geom[lev].CellSizeArray();
+    auto const& problo = geom[lev].ProbLoArray();
+    auto const& probhi = geom[lev].ProbHiArray();
+    GpuArray<int,AMREX_SPACEDIM> wall;
+    for (int d = 0; d < AMREX_SPACEDIM; ++d) { wall[d] = geom[lev].isPeriodic(d) ? 0 : 1; }
+    ReduceOps<ReduceOpMin> reduce_op;
+    ReduceData<Real> reduce_data(reduce_op);
+    for (MFIter mfi(m_leveldata[lev]->density); mfi.isValid(); ++mfi) {
+        reduce_op.eval(mfi.validbox(), reduce_data,
+        [=] AMREX_GPU_DEVICE (int i, int j, int k) -> GpuTuple<Real>
+        {
+            amrex::ignore_unused(k);
+            IntVect const iv(AMREX_D_DECL(i,j,k));
+            Real a[AMREX_SPACEDIM];
+            for (int d = 0; d < AMREX_SPACEDIM; ++d) {
+                a[d] = problo[d] + (Real(iv[d]) + Real(0.5)) * dx[d];
+            }
+            return { incflo_divu_ballistic_minor(a, t_check, problo, probhi, wall) };
+        });
+    }
+    Real minor = amrex::get<0>(reduce_data.value());
+    ParallelDescriptor::ReduceRealMin(minor);
+    if (minor <= 0.0) {
+        amrex::Abort("incflo.probtype = 603: the particle paths cross before (or within 10% of) "
+                     "the end of the run; stop earlier");
+    }
 }
 
 void incflo::init_divu_mms (Box const& vbx, Box const& /*gbx*/,
