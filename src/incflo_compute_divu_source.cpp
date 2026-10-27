@@ -89,26 +89,40 @@ incflo::compute_dsdt ()
     }
 }
 
+bool
+incflo::closed_domain () const
+{
+    for (OrientationIter oit; oit; ++oit) {
+        auto const bct = m_bc_type[oit()];
+        if (bct != BC::periodic && bct != BC::slip_wall && bct != BC::no_slip_wall) {
+            return false;
+        }
+    }
+    return true;
+}
+
 //
-// In a closed domain (only walls and periodic boundaries) the projections are singular,
-// and MLMG silently removes the mean of the right-hand side, so the velocity satisfies
-// div(u) = S - mean(S).  With a uniform 1/(gamma p0) that is the closed-chamber low Mach
-// number correction, S - dp0/dt / (gamma p0), but incflo neither evolves p0 nor adds the
-// compression heating dp0/dt / (rho cp) to the temperature equation.  Warn once.
+// In a closed domain (only walls and periodic boundaries) the projections are singular, and
+// MLMG removes the mean of their right-hand sides, so they enforce div(u) = S - mean(S).  The
+// Godunov edge-state prediction also reads S^(n+1/2) as div(u_mac): for the quantities
+// advected in convective form, and in 3D, through the corner coupling, for all of them.  So
+// compute_MAC_projected_velocities removes that mean from S^(n+1/2) itself, with the
+// function MLMG uses; otherwise the prediction would be off by mean(S), and those quantities
+// would be only first order in time.  The S^(n+1) of the nodal projection is not used
+// anywhere else, so there MLMG's removal is enough.
+//
+// With a uniform 1/(gamma p0), S - mean(S) is the closed-chamber low Mach number constraint
+// S - dp0/dt / (gamma p0), but incflo neither evolves p0 nor adds the compression heating
+// dp0/dt / (rho cp) to the temperature equation, so warn once when the mean of S is not
+// zero.  The integral of S is a sum over the cells, so it is zero only to truncation error
+// even when the exact integral is zero: in the div(u) = S tests it reaches 6e-4 of the
+// integral of |S| with two levels and 32 cells per direction on level 0, while S >= 0
+// everywhere gives 1.
 //
 void
 incflo::check_divu_source_solvability ()
 {
-    if (!m_use_divu_source) { return; }
-
-    bool closed = true;
-    for (OrientationIter oit; oit; ++oit) {
-        auto const bct = m_bc_type[oit()];
-        if (bct != BC::periodic && bct != BC::slip_wall && bct != BC::no_slip_wall) {
-            closed = false;
-        }
-    }
-    if (!closed) { return; }
+    if (!m_use_divu_source || !closed_domain()) { return; }
     if (m_divu_solvability_warned && m_verbose <= 0) { return; }
 
     Vector<MultiFab> abs_S(finest_level+1);
@@ -121,13 +135,15 @@ incflo::check_divu_source_solvability ()
                                                     0, Geom(), refRatio());
     Real const sum_abs_S = amrex::volumeWeightedSum(GetVecOfConstPtrs(abs_S), 0, Geom(),
                                                     refRatio());
+    Real const ratio = (sum_abs_S > Real(0.0)) ? std::abs(sum_S) / sum_abs_S : Real(0.0);
 
     if (m_verbose > 0) {
-        amrex::Print() << "Closed domain: integral of S = " << sum_S << "\n";
+        amrex::Print() << "Closed domain: integral of S = " << sum_S << ", " << ratio
+                       << " of the integral of |S|\n";
     }
 
-    constexpr Real tol = Real(1.e-8);
-    if (!m_divu_solvability_warned && std::abs(sum_S) > tol * sum_abs_S) {
+    constexpr Real tol = Real(1.e-2);
+    if (!m_divu_solvability_warned && ratio > tol) {
         m_divu_solvability_warned = true;
         amrex::Print() << "WARNING: incflo.use_divu_source: the domain is closed but the "
                           "integral of S is not zero.  The projections remove the mean of S, "

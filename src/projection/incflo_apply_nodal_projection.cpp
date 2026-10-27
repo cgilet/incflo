@@ -82,6 +82,9 @@ void incflo::ApplyNodalProjection (Vector<MultiFab const*> density,
     Vector<MultiFab* > Source(finest_level+1, nullptr);
     if (m_use_divu_source)
     {
+        // In a closed domain MLMG removes the mean of the right-hand side, so this enforces
+        // div(u) = S - mean(S).  Nothing else uses this S, so that is all; warn if the mean
+        // is not zero.
         check_divu_source_solvability();
 
         neg_S.resize(finest_level+1);

@@ -1034,6 +1034,9 @@ private:
     void compute_dsdt ();
     // Warn (once) when a closed domain has a non-zero net S
     void check_divu_source_solvability ();
+    // True if every boundary is periodic or a wall: no fluid crosses the boundary, and the
+    // projections are singular
+    [[nodiscard]] bool closed_domain () const;
 
     void Advance (double cur_time);
     [[nodiscard]] bool writeNow () {

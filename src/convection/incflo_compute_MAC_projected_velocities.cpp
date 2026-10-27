@@ -279,7 +279,20 @@ incflo::compute_MAC_projected_velocities (
 
     // div(u_mac) = S^(n+1/2)
     if (m_use_divu_source) {
-        macproj->setDivU(GetVecOfConstPtrs(get_divu_source_nph()));
+        auto divu_source_nph = get_divu_source_nph();
+        // In a closed domain this projection is singular, and MLMG removes the mean of its
+        // right-hand side, so it enforces div(u_mac) = S^(n+1/2) - mean(S^(n+1/2)).  The
+        // edge-state prediction reads S^(n+1/2) as div(u_mac), so remove that mean here, with
+        // the function MLMG uses (on level 0, where S is the average of the finer levels).
+        // S^(n+1/2) is rebuilt every step, so S itself does not change.
+        if (closed_domain()) {
+            Real const mean_S =
+                macproj->getLinOp().getSolvabilityOffset(0, 0, *divu_source_nph[0])[0];
+            for (int lev = 0; lev <= finest_level; ++lev) {
+                divu_source_nph[lev]->plus(-mean_S, 0, 1, divu_source_nph[lev]->nGrow());
+            }
+        }
+        macproj->setDivU(GetVecOfConstPtrs(divu_source_nph));
     }
 
 #ifdef AMREX_USE_EB

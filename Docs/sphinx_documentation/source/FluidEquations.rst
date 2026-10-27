@@ -66,8 +66,10 @@ uses an analytic :math:`S` defined for the chosen ``incflo.probtype``. It is vir
 so a class derived from ``incflo`` can compute :math:`S` from the state instead.
 In a closed domain (only walls and periodic boundaries) the
 projections can only enforce :math:`\nabla \cdot U = S - \bar{S}`, where :math:`\bar{S}` is
-the mean of :math:`S`; incflo warns when :math:`\bar{S} \ne 0`. That is a uniform change
-of the thermodynamic pressure, which incflo does not evolve.
+the mean of :math:`S`, and incflo removes :math:`\bar{S}` from the :math:`S` that the
+advection scheme uses as well, so that the two agree. A nonzero :math:`\bar{S}` is a uniform
+change of the thermodynamic pressure, which incflo does not evolve, so incflo warns when
+:math:`\bar{S} \ne 0`.
 
 Tracer(s): for conservative,
 
