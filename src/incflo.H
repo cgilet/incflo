@@ -783,6 +783,7 @@ private:
     amrex::Gpu::DeviceVector<amrex::BCRec> m_bcrec_temperature_d;
     amrex::Vector<amrex::BCRec> m_bcrec_force;
     amrex::Gpu::DeviceVector<amrex::BCRec> m_bcrec_force_d;
+    amrex::Vector<amrex::BCRec> m_bcrec_divu_source;
 
     amrex::Vector<int> m_iconserv_velocity;
     amrex::Gpu::DeviceVector<int> m_iconserv_velocity_d;
@@ -953,6 +954,7 @@ private:
     [[nodiscard]] amrex::Vector<amrex::BCRec> const& get_tracer_bcrec () const noexcept { return m_bcrec_tracer; }
     [[nodiscard]] amrex::Vector<amrex::BCRec> const& get_temperature_bcrec () const noexcept { return m_bcrec_temperature; }
     [[nodiscard]] amrex::Vector<amrex::BCRec> const& get_force_bcrec () const noexcept { return m_bcrec_force; }
+    [[nodiscard]] amrex::Vector<amrex::BCRec> const& get_divu_source_bcrec () const noexcept { return m_bcrec_divu_source; }
     //
     [[nodiscard]] amrex::BCRec const* get_velocity_bcrec_device_ptr () const noexcept {
         return m_bcrec_velocity_d.data(); }

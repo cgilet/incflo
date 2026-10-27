@@ -372,5 +372,18 @@ void incflo::init_bcs ()
             (m_bcrec_force_d.data(), m_bcrec_force.data(), sizeof(BCRec)*ncomp);
 
     }
+
+    // S and dS/dt: even reflection at physical boundaries
+    {
+        m_bcrec_divu_source.resize(1);
+        for (OrientationIter oit; oit; ++oit) {
+            Orientation ori = oit();
+            if (m_bc_type[ori] == BC::periodic) {
+                m_bcrec_divu_source[0].set(ori, BCType::int_dir);
+            } else {
+                m_bcrec_divu_source[0].set(ori, BCType::reflect_even);
+            }
+        }
+    }
 }
 

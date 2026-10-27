@@ -313,12 +313,12 @@ void incflo::fillcoarsepatch_gradp (int lev, Real time, MultiFab& gp, int ng)
                                  refRatio(lev-1), mapper, bcrec, 0);
 }
 
-// S and dS/dt are filled like a forcing term: first-order extrapolation at physical
-// boundaries (or periodic), conservative interpolation from the coarser level.
+// S and dS/dt: even reflection at physical boundaries (or periodic), conservative
+// interpolation from the coarser level.
 void incflo::fillpatch_divu_source (int lev, Real time, MultiFab& mf,
                                     Vector<MultiFab*> const& src, int ng)
 {
-    const auto& bcrec = get_force_bcrec();
+    const auto& bcrec = get_divu_source_bcrec();
     if (lev == 0) {
         PhysBCFunct<GpuBndryFuncFab<IncfloForFill> > physbc
             (geom[lev], bcrec, IncfloForFill{m_probtype});
@@ -343,7 +343,7 @@ void incflo::fillpatch_divu_source (int lev, Real time, MultiFab& mf,
 void incflo::fillcoarsepatch_divu_source (int lev, Real time, MultiFab& mf,
                                           MultiFab& crse, int ng)
 {
-    const auto& bcrec = get_force_bcrec();
+    const auto& bcrec = get_divu_source_bcrec();
     PhysBCFunct<GpuBndryFuncFab<IncfloForFill> > cphysbc
         (geom[lev-1], bcrec, IncfloForFill{m_probtype});
     PhysBCFunct<GpuBndryFuncFab<IncfloForFill> > fphysbc
