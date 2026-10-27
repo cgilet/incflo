@@ -2,6 +2,8 @@
 
 #include <incflo.H>
 #include <incflo_derive_K.H>
+#include <prob_divu_ballistic.H>
+#include <prob_divu_mms.H>
 
 using namespace amrex;
 
@@ -10,6 +12,16 @@ void incflo::DiffFromExact (int /*lev*/, Geometry& lev_geom, Real time, Real dt,
 {
     auto const& dx = lev_geom.CellSizeArray();
     auto const& problo = lev_geom.ProbLoArray();
+
+    // err_comp: 0 to AMREX_SPACEDIM-1 velocity, AMREX_SPACEDIM pressure, AMREX_SPACEDIM+1
+    // MAC pressure, AMREX_SPACEDIM+2 density, AMREX_SPACEDIM+3+n tracer n
+    if (err_comp >= AMREX_SPACEDIM+2 && m_probtype != 602 && m_probtype != 603) {
+        amrex::Abort("error_density and error_tracer are only implemented for incflo.probtype = 602 and 603");
+    }
+    int const itrac = err_comp - (AMREX_SPACEDIM+3);
+    if (itrac >= m_ntrac) {
+        amrex::Abort("error_tracer: no such tracer");
+    }
 
     // Taylor-Green vortices
     if (1 == m_probtype)
@@ -173,11 +185,19 @@ void incflo::DiffFromExact (int /*lev*/, Geometry& lev_geom, Real time, Real dt,
             });
         }
 
-    // div(u) = 1 in a channel with outflow at both ends in x: u = x - x_center.
-    // Only the velocity is checked.
+    // div(u) = 1 in a channel with outflow at both ends in x: u = x - x_center, and the
+    // density and the tracers stay uniform, rho = ro_0 exp(-t) and s = incflo.ic_t.
     } else if (602 == m_probtype) {
+        if (err_comp == AMREX_SPACEDIM || err_comp == AMREX_SPACEDIM+1) {
+            amrex::Abort("No exact pressure implemented for incflo.probtype = 602");
+        }
+        if (err_comp >= AMREX_SPACEDIM+2 && m_constant_density) {
+            amrex::Abort("error_density and error_tracer for incflo.probtype = 602 need incflo.constant_density = 0");
+        }
         auto const& probhi = lev_geom.ProbHiArray();
         Real const xc = Real(0.5) * (problo[0] + probhi[0]);
+        Real const ro_0 = m_ro_0;
+        Real const ic_t = (itrac >= 0) ? m_ic_t[itrac] : Real(0.0);
         for(MFIter mfi(error, TilingIfNotGPU()); mfi.isValid(); ++mfi)
         {
             Box bx = mfi.tilebox();
@@ -190,8 +210,91 @@ void incflo::DiffFromExact (int /*lev*/, Geometry& lev_geom, Real time, Real dt,
                 Real exact = Real(0.0);
                 if (err_comp == 0) {
                     exact = problo[0] + Real(i+0.5)*dx[0] - xc;
+                } else if (err_comp == AMREX_SPACEDIM+2) {
+                    exact = ro_0 * std::exp(-time);
+                } else if (err_comp >= AMREX_SPACEDIM+3) {
+                    exact = ic_t;
                 }
                 err(i,j,k,soln_comp) -= exact;
+            });
+        }
+
+    // Ballistic potential flow (prob_divu_ballistic.H): velocity, pressure, density and
+    // tracers.  The exact pressure has zero mean, as error_p assumes, and is taken at
+    // t - dt/2, since incflo's pressure is p^(n+1/2).
+    } else if (603 == m_probtype) {
+        if (err_comp == AMREX_SPACEDIM+1) {
+            amrex::Abort("No exact MAC pressure implemented for incflo.probtype = 603");
+        }
+        if (err_comp == AMREX_SPACEDIM+2 && m_constant_density) {
+            amrex::Abort("error_density for incflo.probtype = 603 needs incflo.constant_density = 0");
+        }
+        auto const& probhi = lev_geom.ProbHiArray();
+        GpuArray<Real,AMREX_SPACEDIM> const U{AMREX_D_DECL(m_ic_u, m_ic_v, m_ic_w)};
+        GpuArray<int,AMREX_SPACEDIM> wall;
+        for (int d = 0; d < AMREX_SPACEDIM; ++d) { wall[d] = lev_geom.isPeriodic(d) ? 0 : 1; }
+        // p = (4/3) mu S with the tensor viscous solve, mu S with the per-component one
+        Real const pfac = (use_tensor_solve ? Real(4.0)/Real(3.0) : Real(1.0)) * m_mu;
+        Real const ro_0 = m_ro_0;
+        // With a constant density, a tracer in conservative form is diluted by the expansion
+        bool const dilute = m_constant_density && itrac >= 0 && m_iconserv_tracer[itrac];
+        for(MFIter mfi(error, TilingIfNotGPU()); mfi.isValid(); ++mfi)
+        {
+            Box bx = mfi.tilebox();
+
+            // When we enter this routine, this holds the computed solution
+            Array4<Real> const& err = error.array(mfi);
+
+            ParallelFor(bx, [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept
+            {
+                IntVect const iv(AMREX_D_DECL(i,j,k));
+                GpuArray<Real,AMREX_SPACEDIM> x;
+                for (int d = 0; d < AMREX_SPACEDIM; ++d) {
+                    x[d] = problo[d] + (Real(iv[d]) + Real(0.5)) * dx[d];
+                }
+                Real const t_exact = (err_comp == AMREX_SPACEDIM) ? time - Real(0.5)*dt : time;
+                IncfloDivuBallistic r;
+                incflo_divu_ballistic(x, t_exact, U, problo, probhi, wall, r);
+                Real exact;
+                if (err_comp < AMREX_SPACEDIM) {
+                    exact = r.vel[err_comp];
+                } else if (err_comp == AMREX_SPACEDIM) {
+                    exact = pfac * r.S;
+                } else if (err_comp == AMREX_SPACEDIM+2) {
+                    exact = ro_0 * r.rho0 / r.detF;
+                } else {
+                    exact = dilute ? r.s0 / r.detF : r.s0;
+                }
+                err(i,j,k,soln_comp) -= exact;
+            });
+        }
+
+    // Steady manufactured solution with div(u) = S (prob_divu_mms.H): velocity and
+    // pressure.  The exact pressure has zero mean, as error_p assumes.
+    } else if (604 == m_probtype) {
+        if (err_comp == AMREX_SPACEDIM+1) {
+            amrex::Abort("No exact MAC pressure implemented for incflo.probtype = 604");
+        }
+        auto const& probhi = lev_geom.ProbHiArray();
+        Real const mu = m_mu;
+        Real const ro_0 = m_ro_0;
+        for(MFIter mfi(error, TilingIfNotGPU()); mfi.isValid(); ++mfi)
+        {
+            Box bx = mfi.tilebox();
+
+            // When we enter this routine, this holds the computed solution
+            Array4<Real> const& err = error.array(mfi);
+
+            ParallelFor(bx, [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept
+            {
+                IntVect const iv(AMREX_D_DECL(i,j,k));
+                GpuArray<Real,AMREX_SPACEDIM> x;
+                for (int d = 0; d < AMREX_SPACEDIM; ++d) {
+                    x[d] = problo[d] + (Real(iv[d]) + Real(0.5)) * dx[d];
+                }
+                IncfloDivuMMS r;
+                incflo_divu_mms(x, problo, probhi, mu, ro_0, r);
+                err(i,j,k,soln_comp) -= (err_comp < AMREX_SPACEDIM) ? r.vel[err_comp] : r.p;
             });
         }
     } else {

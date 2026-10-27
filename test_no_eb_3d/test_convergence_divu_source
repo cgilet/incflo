@@ -1,0 +1,24 @@
+#!/bin/bash
+# Convergence of the div(u) = S tests that have exact solutions in 3D, with dx and dt refined
+# together (dt = dx/2).  Run from this directory after building incflo3d.gnu.MPI.ex.  The Linf
+# and L2 norms of the errors at the final time are printed (Norm0 / Norm2).
+#   inputs.divu_source_ballistic (incflo.probtype = 603), periodic: u, v, w and p converge at
+#     second order in L2, and the density and both tracers nearly so at these resolutions (L2
+#     ratios of 3.6 to 3.8 from n = 32 to 64).  The max errors of the density and the tracers
+#     converge more slowly, where the PPM limiter clips smooth extrema.
+#   inputs.divu_source_mms (incflo.probtype = 604): the errors of u, v and w are second order.
+#     The pressure is first order next to the no-slip walls (see the inputs file).
+dt() { awk "BEGIN {printf \"%.10g\", $1/$2}"; }
+for n in 16 32 64; do
+    ./incflo3d.gnu.MPI.ex inputs.divu_source_ballistic amr.n_cell="$n $n $n" incflo.fixed_dt=$(dt 0.5 $n) >& out.ballistic.$n
+    ./incflo3d.gnu.MPI.ex inputs.divu_source_mms amr.n_cell="$n $n $n" incflo.fixed_dt=$(dt 0.5 $n) >& out.mms.$n
+done
+echo "Norm0 / Norm2 of the errors at the final time"
+for n in 16 32 64; do
+    echo "probtype 603, periodic, n = $n"
+    grep Norm0 out.ballistic.$n | tail -7
+done
+for n in 16 32 64; do
+    echo "probtype 604, n = $n"
+    grep Norm0 out.mms.$n | tail -4
+done

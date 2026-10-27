@@ -1,0 +1,99 @@
+#.......................................#
+# div(u) = S regression test (incflo.probtype = 605)
+#
+# A channel along x with a pulsing, localized source of S, like the heat release in a low
+# Mach number flow (src/prob/prob_divu_source.cpp):
+#   S = 2 (1 + sin(2 pi t/0.2)/2) exp(-((x - 0.5)/0.1)^2) sin^2(2 pi y) sin^2(2 pi z)
+# S >= 0, so the fluid expands and speeds up as it passes the source, and the density,
+# which is evolved, drops: mass is conserved. S is negligible at the inflow and the
+# outflow, so the outflow boundary condition is consistent with div(u) = S, and the domain
+# is open, so the mean of S does not have to be zero. The y faces are no-slip walls, where
+# S is zero, and z is periodic.
+# The two tracers start with the same bump upstream of the source; one is advected in
+# conservative form and the other in convective form, which differ where div(u) != 0.
+# The fine level covers the source and follows the density gradient, so S is regridded
+# and filled at coarse/fine boundaries.
+#.......................................#
+
+#.......................................#
+# SOLVER CHOICE
+#.......................................#
+max_step                =   40          # Max number of time steps
+stop_time               =   -1          # No time limit
+incflo.cfl              =   0.5         # CFL factor
+
+incflo.use_divu_source  =   1           # div(u) = S
+incflo.constant_density =   0           # Evolve the density, so mass is conserved
+
+#.......................................#
+# INPUT AND OUTPUT
+#.......................................#
+amr.plot_int            =   20          # Steps between plot files
+amr.check_int           =   -1          # No checkpoint files
+amr.restart             =   ""          # Checkpoint to restart from
+amr.plt_ccse_regtest    =   1
+
+#.......................................#
+# PHYSICS
+#.......................................#
+incflo.gravity          =   0.  0.  0.  # Gravitational force (3D)
+incflo.ro_0             =   1.          # Reference density
+incflo.fluid_model      =   "newtonian" # Fluid model (rheology)
+incflo.mu               =   0.01        # Dynamic viscosity coefficient
+
+incflo.ntrac            =   2           # Number of tracers
+incflo.advect_tracer    =   true        # Should we update them?
+incflo.trac_is_conservative = 1  0      # Conservative and convective form
+incflo.mu_s             =   0.001  0.001 # Scalar diffusion coefficients
+
+#.......................................#
+# ADAPTIVE MESH REFINEMENT
+#.......................................#
+amr.n_cell              =   64  16  16  # Grid cells at coarsest AMR level
+amr.max_level           =   1           # Max AMR level in hierarchy
+amr.regrid_int          =   4           # Steps between regridding
+amr.max_grid_size       =   16          # Max grid size at AMR levels
+amr.blocking_factor     =   8           # Blocking factor for grids
+amr.n_error_buf         =   2           # Cells around tagged cells to refine
+amr.grid_eff            =   0.7
+
+incflo.tag_region       =   true        # Refine around the source ...
+incflo.tag_region_lo    =   0.3  0.   0.
+incflo.tag_region_hi    =   0.7  0.5  0.5
+incflo.gradrhoerr       =   0.02        # ... and where the density varies
+
+#.......................................#
+# GEOMETRY
+#.......................................#
+geometry.prob_lo        =   0.  0.  0.  # Lo corner coordinates
+geometry.prob_hi        =   2.  0.5 0.5 # Hi corner coordinates
+geometry.is_periodic    =   0   0   1   # Periodicity x y z (0/1)
+
+xlo.type                =   "mi"
+xlo.velocity            =   1.  0.  0.
+xlo.density             =   1.
+xlo.tracer              =   1.  1.
+
+xhi.type                =   "po"
+xhi.pressure            =   0.0
+
+ylo.type                =   "nsw"
+yhi.type                =   "nsw"
+
+#.......................................#
+# INITIAL CONDITIONS
+#.......................................#
+incflo.probtype         =   605
+incflo.ic_u             =   1.0         #
+incflo.ic_v             =   0.0         #
+incflo.ic_w             =   0.0         #
+incflo.ic_p             =   0.0         #
+
+#.......................................#
+# VERBOSITY
+#.......................................#
+incflo.verbose            =   1         # incflo itself
+mac_proj.verbose          =   1         # MAC Projector
+nodal_proj.verbose        =   1         # Nodal Projector
+scalar_diffusion.verbose  =   1         # Scalar Diffusion
+tensor_diffusion.verbose  =   1         # Tensor Diffusion

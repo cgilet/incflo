@@ -4,6 +4,8 @@ CEXE_sources += prob_divu_source.cpp
 CEXE_sources += prob_bc.cpp
 
 CEXE_headers += prob_bc.H
+CEXE_headers += prob_divu_ballistic.H
+CEXE_headers += prob_divu_mms.H
 CEXE_headers += incflo_prob_I.H
 CEXE_headers += incflo_prob_usr_I.H
 

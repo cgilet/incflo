@@ -1,0 +1,52 @@
+# div(u) = S: ballistic potential flow (incflo.probtype = 603, src/prob/prob_divu_ballistic.H).
+# Every particle moves in a straight line at constant velocity, x = a + t (U + grad phi0(a)),
+# with U = (incflo.ic_u, incflo.ic_v) and a smooth potential phi0 whose modes are oblique to
+# the grid.  The velocity stays a potential flow, S = div(u) varies in space and time, the
+# density rho0(a) / det(dx/da) and the tracers s0(a) are carried by the flow, and the
+# pressure p = (4/3) mu S balances the viscous force, so no forcing is needed.  error_u,
+# error_v, error_p, error_density and error_tracer hold the differences from the exact
+# solution.  The two tracers are advected in conservative and in convective form; both have
+# the same exact solution, because the density is evolved.  The run has to end before the
+# particle paths cross (t = 1.4); incflo checks this at startup.  The particle paths and the
+# density are those of the Zel'dovich approximation (Zel'dovich, Astronomy and Astrophysics 5
+# (1970) 84-89), which is exact here because no net force acts on the particles.
+#
+# The solution stays exact with no-slip walls (inputs.divu_source_ballistic_walls), with
+# incflo.constant_density = 1 (the conservative tracer then becomes s0(a) / det(dx/da)), with
+# incflo.use_tensor_solve = 0 (then p = mu S), and with AMR.
+
+stop_time               =   0.5
+max_step                =   -1
+
+incflo.cfl              =   0.5
+incflo.init_shrink      =   1.0
+
+amr.plot_int            =   100000
+amr.check_int           =   -1
+amr.plotVariables       =   velx vely gpx gpy p density tracer divu_source error_u error_v error_p error_density error_tracer
+
+incflo.use_divu_source  =   1
+
+incflo.constant_density =   0
+incflo.ro_0             =   1.
+incflo.mu               =   0.05
+incflo.diffusion_type   =   1
+incflo.gravity          =   0.  0.
+
+incflo.ntrac            =   2
+incflo.advect_tracer    =   1
+incflo.trac_is_conservative = 1  0
+incflo.mu_s             =   0.  0.
+
+amr.n_cell              =   32  32
+amr.max_level           =   0
+
+geometry.prob_lo        =   0.  0.
+geometry.prob_hi        =   1.  1.
+geometry.is_periodic    =   1   1
+
+incflo.probtype         =   603
+incflo.ic_u             =   0.5
+incflo.ic_v             =   0.3
+
+incflo.verbose          =   1

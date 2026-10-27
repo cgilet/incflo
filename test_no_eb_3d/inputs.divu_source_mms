@@ -1,0 +1,48 @@
+# div(u) = S: steady manufactured solution (incflo.probtype = 604, src/prob/prob_divu_mms.H),
+# periodic in x with no-slip walls in y and z, adapted from Bouloumou et al., Computers and
+# Fluids 66 (2012) 107-120.  The velocity vanishes on the walls, S = div(u) is not zero
+# inside, and a velocity forcing makes u and p a steady solution.  The run starts from the
+# exact velocity; error_u, error_v, error_w and error_p hold the differences from the exact
+# solution.
+#
+# The density is constant, so incflo warns that mass is not conserved (S is a volume
+# source here).  The forcing assumes the tensor viscous stress (incflo.use_tensor_solve).
+#
+# The velocity converges at second order.  The pressure is first order next to the walls,
+# where the error of the wall-normal pressure gradient does not converge.  That comes from
+# the nodal projection at no-slip walls with viscosity, and happens with S = 0 too.
+
+stop_time               =   1.0
+max_step                =   -1
+
+incflo.cfl              =   0.5
+incflo.init_shrink      =   1.0
+
+amr.plot_int            =   100000
+amr.check_int           =   -1
+amr.plotVariables       =   velx vely velz gpx gpy gpz p divu_source error_u error_v error_w error_p
+
+incflo.use_divu_source  =   1
+
+incflo.constant_density =   1
+incflo.ro_0             =   1.
+incflo.mu               =   0.05
+incflo.diffusion_type   =   1
+incflo.gravity          =   0.  0.  0.
+incflo.advect_tracer    =   0
+
+amr.n_cell              =   32  32  32
+amr.max_level           =   0
+
+geometry.prob_lo        =   0.  -0.5 -0.5
+geometry.prob_hi        =   1.   0.5  0.5
+geometry.is_periodic    =   1   0   0
+
+ylo.type                =   "nsw"
+yhi.type                =   "nsw"
+zlo.type                =   "nsw"
+zhi.type                =   "nsw"
+
+incflo.probtype         =   604
+
+incflo.verbose          =   1

@@ -1,4 +1,5 @@
 #include <incflo.H>
+#include <prob_divu_mms.H>
 
 using namespace amrex;
 
@@ -155,6 +156,39 @@ void incflo::compute_vel_forces_on_level (int lev,
                     Real  gpp  = Real(12) * y*y - Real(2);
 
                     vel_f(i,j,k,1) += Real(8) / Re * (Real(24) * capF + Real(2) * fp * gpp + fppp * g) + Real(64) * (capF2 * capG1 - g * gp * capF1);
+                });
+            } else if (m_probtype == 604) {
+                // The forcing of the steady manufactured solution with div(u) = S
+                // (prob_divu_mms.H), per unit mass
+                auto const problo = geom[lev].ProbLoArray();
+                auto const probhi = geom[lev].ProbHiArray();
+                Real const mu = m_mu;
+                Real const ro_0 = m_ro_0;
+                ParallelFor(bx, [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept
+                {
+                    Real rhoinv = Real(1)/rho(i,j,k);
+
+                    if (include_pressure_gradient)
+                    {
+                        AMREX_D_TERM(vel_f(i,j,k,0) = -(gradp(i,j,k,0)+l_gp0[0])*rhoinv + l_gravity[0];,
+                                     vel_f(i,j,k,1) = -(gradp(i,j,k,1)+l_gp0[1])*rhoinv + l_gravity[1];,
+                                     vel_f(i,j,k,2) = -(gradp(i,j,k,2)+l_gp0[2])*rhoinv + l_gravity[2];);
+                    } else {
+                        AMREX_D_TERM(vel_f(i,j,k,0) = -(               l_gp0[0])*rhoinv + l_gravity[0];,
+                                     vel_f(i,j,k,1) = -(               l_gp0[1])*rhoinv + l_gravity[1];,
+                                     vel_f(i,j,k,2) = -(               l_gp0[2])*rhoinv + l_gravity[2];);
+                    }
+
+                    IntVect const iv(AMREX_D_DECL(i,j,k));
+                    GpuArray<Real,AMREX_SPACEDIM> x;
+                    for (int d = 0; d < AMREX_SPACEDIM; ++d) {
+                        x[d] = problo[d] + (Real(iv[d]) + Real(0.5)) * dx[d];
+                    }
+                    IncfloDivuMMS r;
+                    incflo_divu_mms(x, problo, probhi, mu, ro_0, r);
+                    for (int d = 0; d < AMREX_SPACEDIM; ++d) {
+                        vel_f(i,j,k,d) += r.force[d];
+                    }
                 });
             } else {
                 ParallelFor(bx, [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept
