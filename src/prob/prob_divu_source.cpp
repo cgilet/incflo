@@ -124,4 +124,14 @@ void incflo::prob_divu_source (int lev, MultiFab& divu_source, Real time) const
     {
         amrex::Abort("prob_divu_source: no S defined for this incflo.probtype");
     }
+
+    // A constant added to S, for testing (incflo.divu_source_offset).  In a closed domain the
+    // projections remove it, so the exact solutions of probtypes 600, 601, 603 and 604 still
+    // hold, and the errors must not change.
+    Real offset = Real(0.0);
+    ParmParse pp("incflo");
+    pp.query("divu_source_offset", offset);
+    if (offset != Real(0.0)) {
+        divu_source.plus(offset, 0, 1, 0);
+    }
 }
