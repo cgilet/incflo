@@ -78,6 +78,9 @@ No boundary type is given for the faces of a periodic direction (``geometry.is_p
 | temperature        | Sets Dirichlet boundary condition for temperature, as for tracer          |    Real     |  1.0      |
 +--------------------+---------------------------------------------------------------------------+-------------+-----------+
 
+   Mass inflow needs a pressure inflow or outflow, direction-dependent or mixed boundary for
+   the fluid to leave by; incflo aborts otherwise, with or without :math:`S`.
+
    The 'mixed' boundary type allows for inflow and outflow on the same domain face.
    The implementation requires that there is EB separating the inflow and outflow regions,
    requires ``incflo.advection_type = Godunov``,

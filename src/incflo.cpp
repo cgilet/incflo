@@ -38,6 +38,26 @@ incflo::incflo ()
         amrex::Abort("incflo.use_divu_source is not yet implemented with direction_dependent boundaries");
     }
 
+    // Mass inflow needs a boundary for the fluid to leave by.  Without a pressure,
+    // direction-dependent or mixed boundary the projections are singular, and MLMG would
+    // silently remove the net inflow (less the integral of S) from their right-hand sides.
+    {
+        bool has_mass_inflow = false;
+        bool has_outlet = false;
+        for (OrientationIter oit; oit; ++oit) {
+            auto const bct = m_bc_type[oit()];
+            if (bct == BC::mass_inflow) { has_mass_inflow = true; }
+            if (bct == BC::pressure_inflow || bct == BC::pressure_outflow ||
+                bct == BC::direction_dependent || bct == BC::mixed) {
+                has_outlet = true;
+            }
+        }
+        if (has_mass_inflow && !has_outlet) {
+            amrex::Abort("Mass inflow needs a pressure inflow or outflow, direction-dependent or "
+                         "mixed boundary for the fluid to leave by");
+        }
+    }
+
     init_advection();
 
     set_background_pressure();
