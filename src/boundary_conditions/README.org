@@ -1,19 +1,19 @@
 * fillpatch
 
-|             | pi       | po       | mi       | nsw                    | sw                                    | dir_dep              |
-|-------------+----------+----------+----------+------------------------+---------------------------------------|-----------------------
-| v_n         | foextrap | foextrap | ext_dir  | ext_dir (0)            | ext_dir (0)                           | ext_dir if inflowing |
-|             |          |          |          |                        |                                       | foextrap otherwise   |
-| v_t         | foextrap | foextrap | ext_dir  | ext_dir (0)            | hoextrap                              | ext_dir if inflowing |
-|             |          |          |          |                        |                                       | foextrap otherwise   |
-| rho         | foextrap | foextrap | ext_dir  | foextrap               | if (advection_type == "BDS") foextrap | ext_dir if inflowing |
-|             |          |          |          |                        | else hoextrap                         | foextrap otherwise   |
-| tracer      | foextrap | foextrap | ext_dir  | ext_dir if specified   | ext_dir if specified, otherwise       | ext_dir if inflowing |
-|             |          |          |          | foextrap otherwise     | if (advection_type == "BDS") foextrap | foextrap otherwise   |
-|             |          |          |          |                        | else hoextrap                         |                      |
-| temperature | foextrap | foextrap | ext_dir  | ext_dir if specified   | ext_dir if specified, otherwise       | ext_dir if inflowing |
-|             |          |          |          | reflect_even otherwise | reflect_even                          | foextrap otherwise   |
-| force       | foextrap | foextrap | foextrap | foextrap               | foextrap                              | foextrap             |
+|             | pi       | po       | mi       | nsw                                   | sw                                    | dir_dep              |
+|-------------+----------+----------+----------+---------------------------------------+---------------------------------------|-----------------------
+| v_n         | foextrap | foextrap | ext_dir  | ext_dir (0)                           | ext_dir (0)                           | ext_dir if inflowing |
+|             |          |          |          |                                       |                                       | foextrap otherwise   |
+| v_t         | foextrap | foextrap | ext_dir  | ext_dir (0)                           | hoextrap                              | ext_dir if inflowing |
+|             |          |          |          |                                       |                                       | foextrap otherwise   |
+| rho         | foextrap | foextrap | ext_dir  | if (advection_type == "BDS") foextrap | if (advection_type == "BDS") foextrap | ext_dir if inflowing |
+|             |          |          |          | else hoextrap                         | else hoextrap                         | foextrap otherwise   |
+| tracer      | foextrap | foextrap | ext_dir  | ext_dir if specified, otherwise       | ext_dir if specified, otherwise       | ext_dir if inflowing |
+|             |          |          |          | if (advection_type == "BDS") foextrap | if (advection_type == "BDS") foextrap | foextrap otherwise   |
+|             |          |          |          | else hoextrap                         | else hoextrap                         |                      |
+| temperature | foextrap | foextrap | ext_dir  | ext_dir if specified                  | ext_dir if specified, otherwise       | ext_dir if inflowing |
+|             |          |          |          | reflect_even otherwise                | reflect_even                          | foextrap otherwise   |
+| force       | foextrap | foextrap | foextrap | foextrap                              | foextrap                              | foextrap             |
 
 * projection
 
