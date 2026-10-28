@@ -5,11 +5,11 @@
 #
 # The velocity and the pressure converge at second order, though in the cells next to the walls
 # the pressure is first order, since d2u_n/dn2 = dS/dn != 0 there (see the docs); at these
-# resolutions its error there is still below the one inside.  The density and the tracers are
-# first order in the two cells next to the walls, and second order elsewhere, mainly because
-# their ghost cells at no-slip walls are filled by first-order extrapolation: since S is not zero
-# on the walls, the normal velocity grows linearly from the walls (with S = 0 it grows
-# quadratically), so the error of that extrapolation reaches the fluxes at first order.
+# resolutions its error there is still below the one inside.  The density and the conservative
+# tracer converge at second order.  The convective tracer is first order in the cells next to
+# the walls: its convective term uses the PPM edge state at the wall face, which is the cell
+# average there, times div(u) = S, which is not zero on the walls (a fix in AMReX-Hydro makes it
+# second order).
 
 stop_time               =   0.5
 max_step                =   -1

@@ -140,11 +140,20 @@ void incflo::init_bcs ()
             AMREX_D_TERM(m_bcrec_velocity[0].set(ori, BCType::ext_dir);,
                          m_bcrec_velocity[1].set(ori, BCType::ext_dir);,
                          m_bcrec_velocity[2].set(ori, BCType::ext_dir););
-            m_bcrec_density[0].set(ori, BCType::foextrap);
+            // The density, and the tracers without a wall value, are extrapolated to the wall.
+            // With div(u) = 0, first order is enough: since u_t = 0 along the wall,
+            // d(u_n)/dn = -div_t(u_t) = 0 there, so u_n grows quadratically from the wall, and
+            // the O(dx) error of foextrap gives an O(dx^3) error in the fluxes next to the wall.
+            // With div(u) = S, d(u_n)/dn = S on the wall, so where S != 0 the cells next to the
+            // wall would be first order: extrapolate at higher order, as at slip walls (BDS needs
+            // foextrap).
+            int const scalar_bc = (m_use_divu_source && m_advection_type != "BDS")
+                ? BCType::hoextrap : BCType::foextrap;
+            m_bcrec_density[0].set(ori, scalar_bc);
             if ( pp.contains("tracer") ) {
                 for (auto& b : m_bcrec_tracer) { b.set(ori, BCType::ext_dir); }
             } else {
-                for (auto& b : m_bcrec_tracer) { b.set(ori, BCType::foextrap); }
+                for (auto& b : m_bcrec_tracer) { b.set(ori, scalar_bc); }
             }
             if ( pp.contains("temperature") ) {
                 for (auto& b : m_bcrec_temperature) { b.set(ori, BCType::ext_dir); }

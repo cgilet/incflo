@@ -14,10 +14,10 @@
 #     the same mu (the decaying Taylor vortex) also has a first-order p there.
 #   inputs.divu_source_ballistic_walls (603), no-slip walls: u, v and p converge at second
 #     order; p is first order in the cells next to the walls (see the inputs file), but its
-#     error there is smaller than inside at these resolutions.  The density and the tracers are
-#     first order in the two cells next to the walls (see the inputs file), so their L2 errors
-#     converge at between order 1.5 and 2, and the max error of the convective tracer, which is
-#     largest there, at first order.
+#     error there is smaller than inside at these resolutions.  The density and the
+#     conservative tracer converge at nearly second order in L2.  The convective tracer is first
+#     order in the cells next to the walls (see the inputs file), so its L2 error converges at
+#     order 1.7, and its max error, which is largest there, at first order.
 #   inputs.divu_source_mms (incflo.probtype = 604): the errors of u and v are second order.
 #     The pressure is first order next to the no-slip walls (see the inputs file).
 #   inputs.divu_source_temperature (incflo.probtype = 606): S = kappa (T - T_ref) is computed

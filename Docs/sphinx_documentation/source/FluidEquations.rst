@@ -90,8 +90,8 @@ combinations are not tested. Known limitations:
 
 - At a pressure outflow the viscous terms take a zero normal derivative of the velocity, which is
   only consistent with :math:`\nabla \cdot U = S` where :math:`S = 0`, so keep :math:`S` zero there.
-- Where :math:`S \ne 0` on a no-slip wall, the density and the tracers are first order in the
-  cells next to the wall; at slip walls, only the tracers in convective form are.
+- Where :math:`S \ne 0` on a wall, the tracers in convective form are first order in the cells
+  next to it; this needs a fix in AMReX-Hydro.
 - With viscosity, the pressure is first order along coarse/fine boundaries; this also happens with
   :math:`S = 0`.
 - The terms of the right-hand side of the nodal projection, :math:`\nabla \cdot U^*` and
