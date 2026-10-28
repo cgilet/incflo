@@ -120,9 +120,9 @@ public:
 
     // Fill the valid region of divu_source with S at the given time, computed from the
     // given state, which has at least one filled ghost cell (temperature is empty
-    // unless incflo.use_temperature = 1).  The default uses the analytic S of the
-    // probtype (prob_divu_source).  Virtual so that a derived class can compute S from
-    // the state instead.
+    // unless incflo.use_temperature = 1).  The default uses the S of the probtype
+    // (prob_divu_source), which is analytic except for probtype 606.  Virtual so that a
+    // derived class can compute S from the state instead.
     virtual void compute_divu_source (amrex::Vector<amrex::MultiFab      *> const& divu_source,
                                       amrex::Vector<amrex::MultiFab const*> const& density,
                                       amrex::Vector<amrex::MultiFab const*> const& tracer,
@@ -291,7 +291,9 @@ public:
     ///////////////////////////////////////////////////////////////////////////
 
     void prob_init_fluid (int lev);
-    void prob_divu_source (int lev, amrex::MultiFab& divu_source, amrex::Real time) const;
+    void prob_divu_source (int lev, amrex::MultiFab& divu_source,
+                           amrex::MultiFab const* density, amrex::MultiFab const* tracer,
+                           amrex::MultiFab const* temperature, amrex::Real time) const;
     void prob_set_BC_MF (amrex::Orientation const& ori, amrex::Box const& bx,
                          amrex::Array4<int> const& mask, int lev,
                          int inflow_val, int outflow_val, std::string const& field);

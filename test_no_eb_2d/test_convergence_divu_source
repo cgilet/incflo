@@ -18,11 +18,19 @@
 #     max error of the convective tracer, which is largest there, at first order.
 #   inputs.divu_source_mms (incflo.probtype = 604): the errors of u and v are second order.
 #     The pressure is first order next to the no-slip walls (see the inputs file).
+#   inputs.divu_source_temperature (incflo.probtype = 606): S = kappa (T - T_ref) is computed
+#     from the temperature, and the fluid enters and leaves the domain.  u and p converge at
+#     second order or faster.  The density, the tracers and the temperature converge at second
+#     order in L2, and their max errors, at the peak of the warm layer, which the PPM limiter
+#     clips, at order 1.6.
 dt() { awk "BEGIN {printf \"%.10g\", $1/$2}"; }
 for n in 32 64 128 256; do
     ./incflo2d.gnu.MPI.ex inputs.divu_source_ballistic amr.n_cell="$n $n" incflo.fixed_dt=$(dt 0.5 $n) >& out.ballistic.$n
     ./incflo2d.gnu.MPI.ex inputs.divu_source_ballistic_walls amr.n_cell="$n $n" incflo.fixed_dt=$(dt 0.5 $n) >& out.walls.$n
     ./incflo2d.gnu.MPI.ex inputs.divu_source_mms amr.n_cell="$n $n" incflo.fixed_dt=$(dt 0.5 $n) >& out.mms.$n
+done
+for n in 64 128 256 512; do
+    ./incflo2d.gnu.MPI.ex inputs.divu_source_temperature amr.n_cell="$n $((n/8))" incflo.fixed_dt=$(dt 0.5 $n) >& out.temperature.$n
 done
 for n in 32 64 128; do
     ./incflo2d.gnu.MPI.ex inputs.divu_source_ballistic amr.n_cell="$n $n" incflo.fixed_dt=$(dt 0.25 $n) \
@@ -46,4 +54,8 @@ done
 for n in 32 64 128 256; do
     echo "probtype 604, n = $n"
     grep Norm0 out.mms.$n | tail -3
+done
+for n in 64 128 256 512; do
+    echo "probtype 606, n = $n"
+    grep Norm0 out.temperature.$n | tail -7
 done

@@ -1,6 +1,7 @@
 #include <incflo.H>
 #include <prob_divu_ballistic.H>
 #include <prob_divu_mms.H>
+#include <prob_divu_temperature.H>
 
 using namespace amrex;
 
@@ -38,6 +39,9 @@ void incflo::prob_init_fluid (int lev)
     if (603 == m_probtype) {
         check_divu_ballistic(lev);
     }
+    if (606 == m_probtype) {
+        check_divu_temperature(lev);
+    }
 
     // The forcing of the manufactured solution assumes these
     if (604 == m_probtype) {
@@ -55,11 +59,6 @@ void incflo::prob_init_fluid (int lev)
         const Box& gbx = mfi.fabbox();
         if (0 == m_probtype || 114 == m_probtype )
         { }
-        else if (600 == m_probtype || 601 == m_probtype || 602 == m_probtype)
-        {
-            // div(u) = S tests: the flow comes from the initial projection with S
-            // (prob_divu_source), so the defaults are all we need
-        }
         else if (603 == m_probtype)
         {
             init_divu_ballistic(vbx, gbx,
@@ -83,6 +82,15 @@ void incflo::prob_init_fluid (int lev)
                             ld.density.array(mfi),
                             ld.tracer.array(mfi),
                             domain, dx, problo, probhi);
+        }
+        else if (606 == m_probtype)
+        {
+            init_divu_temperature(vbx, gbx,
+                                  ld.velocity.array(mfi),
+                                  ld.density.array(mfi),
+                                  ld.tracer.array(mfi),
+                                  ld.temperature.array(mfi),
+                                  domain, dx, problo, probhi);
         }
         else if (1 == m_probtype)
         {
@@ -1397,4 +1405,88 @@ void incflo::init_divu_plume (Box const& vbx, Box const& /*gbx*/,
             tracer(i,j,k,n) = s;
         }
     });
+}
+
+// probtype 606: a warm layer carried through a channel along x, with S = kappa (T - T_ref)
+// (prob_divu_temperature.H)
+void incflo::init_divu_temperature (Box const& vbx, Box const& /*gbx*/,
+                                    Array4<Real> const& vel,
+                                    Array4<Real> const& density,
+                                    Array4<Real> const& tracer,
+                                    Array4<Real> const& temperature,
+                                    Box const& /*domain*/,
+                                    GpuArray<Real, AMREX_SPACEDIM> const& dx,
+                                    GpuArray<Real, AMREX_SPACEDIM> const& problo,
+                                    GpuArray<Real, AMREX_SPACEDIM> const& probhi) const
+{
+    Orientation const xlo(0, Orientation::low);
+    Real const U = m_bc_velocity[xlo][0];
+    Real const rho0 = m_bc_density[xlo];
+    Real const T_ref = m_bc_temperature[xlo];
+    auto const q = incflo_divu_temperature_parm(problo[0], probhi[0]);
+    auto const tot = incflo_divu_temperature_int(q.amax, Real(0.0), q);
+    Real const xhi = probhi[0];
+    int const ntrac = m_ntrac;
+
+    ParallelFor(vbx, [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept
+    {
+        Real const x = problo[0] + (Real(i) + Real(0.5)) * dx[0];
+        IncfloDivuTemperature r;
+        incflo_divu_temperature(x, Real(0.0), U, rho0, Real(0.0), xhi, q, tot, r);
+        vel(i,j,k,0) = r.u;
+        for (int d = 1; d < AMREX_SPACEDIM; ++d) {
+            vel(i,j,k,d) = Real(0.0);
+        }
+        density(i,j,k) = r.rho;
+        temperature(i,j,k) = T_ref + r.theta;
+        for (int n = 0; n < ntrac; ++n) {
+            tracer(i,j,k,n) = r.theta / q.dT;
+        }
+    });
+}
+
+// probtype 606: the exact solution assumes these.  Also check that the warm layer stays away
+// from the outflow until the end of the run (with a 10% margin), so that S = 0 there.
+void incflo::check_divu_temperature (int lev) const
+{
+    Orientation const xlo(0, Orientation::low);
+    Orientation const xhi(0, Orientation::high);
+    bool periodic_across = true;
+    for (int d = 1; d < AMREX_SPACEDIM; ++d) {
+        periodic_across = periodic_across && geom[lev].isPeriodic(d);
+    }
+    if (m_bc_type[xlo] != BC::mass_inflow || m_bc_velocity[xlo][0] <= 0.0 ||
+        m_bc_type[xhi] != BC::pressure_outflow || m_bc_pressure[xhi] != 0.0 || !periodic_across) {
+        amrex::Abort("incflo.probtype = 606 needs mass inflow with a positive velocity at xlo, "
+                     "pressure outflow with xhi.pressure = 0, and periodic boundaries across the "
+                     "channel");
+    }
+    bool zero_gravity = true;
+    for (int d = 0; d < AMREX_SPACEDIM; ++d) { zero_gravity = zero_gravity && m_gravity[d] == 0.0; }
+    bool zero_tracer_diffusion = true;
+    if (m_advect_tracer) {
+        for (int n = 0; n < m_ntrac; ++n) { zero_tracer_diffusion = zero_tracer_diffusion && m_mu_s[n] == 0.0; }
+    }
+    if (!m_use_divu_source || !m_use_temperature || m_mu_T != 0.0 || m_constant_density ||
+        m_fluid_model != FluidModel::Newtonian || !zero_gravity || !zero_tracer_diffusion) {
+        amrex::Abort("incflo.probtype = 606 requires incflo.use_divu_source = 1, "
+                     "incflo.use_temperature = 1, incflo.mu_T = 0, incflo.constant_density = 0, "
+                     "a Newtonian fluid, no gravity and no tracer diffusion");
+    }
+
+    Real t_end = m_stop_time;
+    if (t_end <= 0.0 && m_fixed_dt > 0.0 && m_max_step > 0) { t_end = m_max_step * m_fixed_dt; }
+    if (t_end <= 0.0) {
+        amrex::Print() << "WARNING: incflo.probtype = 606: cannot check that the warm layer stays "
+                       << "away from the outflow until the end of the run\n";
+        return;
+    }
+    Real const t_check = Real(1.1) * t_end;
+    auto const q = incflo_divu_temperature_parm(geom[lev].ProbLo(0), geom[lev].ProbHi(0));
+    Real const aL = geom[lev].ProbHi(0) - m_bc_velocity[xlo][0] * t_check
+        - incflo_divu_temperature_int(q.amax, t_check, q).E;
+    if (aL < q.amax) {
+        amrex::Abort("incflo.probtype = 606: the warm layer reaches the outflow before (or within "
+                     "10% of) the end of the run; stop earlier");
+    }
 }

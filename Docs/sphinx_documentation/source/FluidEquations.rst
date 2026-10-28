@@ -62,8 +62,10 @@ the density changes along particle paths as :math:`D\rho/Dt = -\rho S`. With
 the constraint adds mass at the rate :math:`\rho_0 S` per unit volume. That is not a low
 Mach number model, and incflo warns about it, but it has exact solutions that are useful
 for testing. :math:`S` comes from ``incflo::compute_divu_source``, which by default
-uses an analytic :math:`S` defined for the chosen ``incflo.probtype``. It is virtual,
-so a class derived from ``incflo`` can compute :math:`S` from the state instead.
+uses the :math:`S` defined for the chosen ``incflo.probtype``: an analytic :math:`S`, except for
+``incflo.probtype = 606``, where :math:`S = \kappa (T - T_{ref})` is computed from the temperature.
+It is virtual, so a class derived from ``incflo`` can compute :math:`S` from the state instead,
+as a low Mach number model would.
 In a closed domain (only walls and periodic boundaries) the
 projections can only enforce :math:`\nabla \cdot U = S - \bar{S}`, where :math:`\bar{S}` is
 the mean of :math:`S`; incflo warns when :math:`\bar{S} \ne 0`. That is a uniform change

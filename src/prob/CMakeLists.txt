@@ -7,6 +7,7 @@ target_sources(incflo
    prob_bc.H
    prob_divu_ballistic.H
    prob_divu_mms.H
+   prob_divu_temperature.H
    prob_bc.cpp
    prob_init_fluid.cpp
    prob_init_fluid_usr.cpp

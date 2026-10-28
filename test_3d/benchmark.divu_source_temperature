@@ -1,0 +1,81 @@
+#.......................................#
+# div(u) = S regression test with an S computed from the state (incflo.probtype = 606)
+#
+# A warm layer carried through a channel along x, with (src/prob/prob_divu_temperature.H)
+#   S = 2 (T - T_ref),  T_ref = xlo.temperature.
+# There is no conduction, so each particle keeps its temperature and expands at the rate S:
+# the flow stays 1D, and the density, which is evolved, drops in the layer.  S is zero at the
+# inflow and the outflow.  The two tracers, in conservative and in convective form, equal
+# T - T_ref.  One level, so a restart reproduces the run exactly.
+#.......................................#
+
+#.......................................#
+# SOLVER CHOICE
+#.......................................#
+max_step                =   1000        # Max number of time steps
+stop_time               =   0.1         # Final time
+incflo.cfl              =   0.5         # CFL factor
+
+incflo.use_divu_source  =   1           # div(u) = S
+incflo.use_temperature  =   1           # S comes from the temperature
+incflo.constant_density =   0           # Evolve the density, so mass is conserved
+
+#.......................................#
+# INPUT AND OUTPUT
+#.......................................#
+amr.plot_int            =   10          # Steps between plot files
+amr.check_int           =   5           # Steps between checkpoint files
+amr.restart             =   ""          # Checkpoint to restart from
+amr.plt_ccse_regtest    =   1
+
+#.......................................#
+# PHYSICS
+#.......................................#
+incflo.gravity          =   0.  0.  0.  # Gravitational force (3D)
+incflo.ro_0             =   1.          # Reference density
+incflo.fluid_model      =   "newtonian" # Fluid model (rheology)
+incflo.mu               =   0.01        # Dynamic viscosity coefficient
+incflo.mu_T             =   0.          # No conduction
+
+incflo.ntrac            =   2           # Number of tracers
+incflo.advect_tracer    =   true        # Should we update them?
+incflo.trac_is_conservative = 1  0      # Conservative and convective form
+incflo.mu_s             =   0.  0.      # Scalar diffusion coefficients
+
+#.......................................#
+# ADAPTIVE MESH REFINEMENT
+#.......................................#
+amr.n_cell              =   64  8  8    # Grid cells at coarsest AMR level
+amr.max_level           =   0           # Max AMR level in hierarchy
+amr.max_grid_size       =   16          # Max grid size at AMR levels
+amr.blocking_factor     =   8           # Blocking factor for grids
+
+#.......................................#
+# GEOMETRY
+#.......................................#
+geometry.prob_lo        =   0.  0.   0.   # Lo corner coordinates
+geometry.prob_hi        =   2.  0.25 0.25 # Hi corner coordinates
+geometry.is_periodic    =   0   1    1    # Periodicity x y z (0/1)
+
+xlo.type                =   "mi"
+xlo.velocity            =   1.  0.  0.
+xlo.density             =   1.
+xlo.tracer              =   0.  0.
+xlo.temperature         =   1.
+
+xhi.type                =   "po"
+xhi.pressure            =   0.0
+
+#.......................................#
+# INITIAL CONDITIONS
+#.......................................#
+incflo.probtype         =   606
+
+#.......................................#
+# VERBOSITY
+#.......................................#
+incflo.verbose            =   1         # incflo itself
+mac_proj.verbose          =   1         # MAC Projector
+nodal_proj.verbose        =   1         # Nodal Projector
+scalar_diffusion.verbose  =   1         # Scalar Diffusion
+tensor_diffusion.verbose  =   1         # Tensor Diffusion

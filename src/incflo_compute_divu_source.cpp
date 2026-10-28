@@ -14,15 +14,17 @@ using namespace amrex;
 
 void
 incflo::compute_divu_source (Vector<MultiFab      *> const& divu_source,
-                             Vector<MultiFab const*> const& /*density*/,
-                             Vector<MultiFab const*> const& /*tracer*/,
-                             Vector<MultiFab const*> const& /*temperature*/,
+                             Vector<MultiFab const*> const& density,
+                             Vector<MultiFab const*> const& tracer,
+                             Vector<MultiFab const*> const& temperature,
                              Real time)
 {
     BL_PROFILE("incflo::compute_divu_source()");
 
     for (int lev = 0; lev <= finest_level; ++lev) {
-        prob_divu_source(lev, *divu_source[lev], time);
+        // temperature is empty unless incflo.use_temperature = 1
+        prob_divu_source(lev, *divu_source[lev], density[lev], tracer[lev],
+                         temperature.empty() ? nullptr : temperature[lev], time);
     }
 }
 
