@@ -32,8 +32,9 @@
 // phi0 = A W g, with xi = (a - prob_lo) / L in [0, 1]^d:
 //   g = 1 + sum_m c_m sin(2 pi k_m . xi + theta_m), oblique modes that are periodic,
 //   W = the product over the non-periodic directions d of sin^2(pi xi_d),
-// so that grad(phi0) vanishes on the faces of the non-periodic directions, which are no-slip
-// walls (and then U = 0).  The amplitude is for a unit domain: the paths first cross at
+// so that grad(phi0) vanishes on the faces of the non-periodic directions, which are walls (and
+// then U = 0).  There the normal derivative of the tangential velocity vanishes too, so the
+// walls can be no-slip or slip.  The amplitude is for a unit domain: the paths first cross at
 // t = 1.4 in 2D and t = 1.1 in 3D.  The label a of a point x is found by Newton's method.
 
 struct IncfloDivuBallistic

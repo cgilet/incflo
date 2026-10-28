@@ -1,0 +1,77 @@
+#!/bin/bash
+# Convergence of the div(u) = S tests with exact solutions (see test_convergence_divu_source)
+# with other options.  Run from this directory after building incflo2d.gnu.MPI.ex.  The Linf
+# and L2 norms of the errors at the final time are printed (Norm0 / Norm2).
+#   Explicit viscous terms (incflo.diffusion_type = 0), with dt from the CFL condition, which
+#     then includes the viscous limit dt ~ dx^2: the errors converge as with Crank-Nicolson
+#     (incflo.diffusion_type = 1, used in test_convergence_divu_source), for 603 periodic and
+#     with no-slip walls, 604 and 606.
+#   Implicit viscous terms (incflo.diffusion_type = 2, the default) are first order in time, so
+#     with dt = dx/2 the errors of u and p converge at first order in 603.  In 606 the viscous
+#     force is a gradient, so u is as with Crank-Nicolson and only p converges at first order.
+#   Conservative momentum (incflo.advect_momentum = 1), PLM (incflo.use_ppm = 0) and the
+#     per-component viscous solve (incflo.use_tensor_solve = 0, then p = mu S): the errors
+#     converge as with the defaults, for 603 periodic and 606.
+#   603 with slip walls: u, v and p converge at second order (p is first order in the cells
+#     next to the walls, as with no-slip walls), the density and the conservative tracer at
+#     second order in L2.  The convective tracer is first order in the cells next to
+#     the walls, where the PPM edge state at the wall face, which its convective term uses, is
+#     the cell average.
+dt() { awk "BEGIN {printf \"%.10g\", $1/$2}"; }
+for n in 32 64 128; do
+    ./incflo2d.gnu.MPI.ex inputs.divu_source_ballistic amr.n_cell="$n $n" incflo.diffusion_type=0 >& out.ballistic_explicit.$n
+    ./incflo2d.gnu.MPI.ex inputs.divu_source_ballistic_walls amr.n_cell="$n $n" incflo.diffusion_type=0 >& out.walls_explicit.$n
+    ./incflo2d.gnu.MPI.ex inputs.divu_source_mms amr.n_cell="$n $n" incflo.diffusion_type=0 >& out.mms_explicit.$n
+done
+for n in 64 128 256 512; do
+    ./incflo2d.gnu.MPI.ex inputs.divu_source_temperature amr.n_cell="$n $((n/8))" incflo.diffusion_type=0 >& out.temperature_explicit.$n
+    ./incflo2d.gnu.MPI.ex inputs.divu_source_temperature amr.n_cell="$n $((n/8))" incflo.fixed_dt=$(dt 0.5 $n) \
+        incflo.diffusion_type=2 >& out.temperature_implicit.$n
+done
+for n in 32 64 128 256; do
+    ./incflo2d.gnu.MPI.ex inputs.divu_source_ballistic amr.n_cell="$n $n" incflo.fixed_dt=$(dt 0.5 $n) \
+        incflo.diffusion_type=2 >& out.ballistic_implicit.$n
+    ./incflo2d.gnu.MPI.ex inputs.divu_source_ballistic amr.n_cell="$n $n" incflo.fixed_dt=$(dt 0.5 $n) \
+        incflo.advect_momentum=1 >& out.ballistic_momentum.$n
+    ./incflo2d.gnu.MPI.ex inputs.divu_source_ballistic amr.n_cell="$n $n" incflo.fixed_dt=$(dt 0.5 $n) \
+        incflo.use_ppm=0 >& out.ballistic_plm.$n
+    ./incflo2d.gnu.MPI.ex inputs.divu_source_ballistic amr.n_cell="$n $n" incflo.fixed_dt=$(dt 0.5 $n) \
+        incflo.use_tensor_solve=0 >& out.ballistic_per_component.$n
+    ./incflo2d.gnu.MPI.ex inputs.divu_source_ballistic_walls amr.n_cell="$n $n" incflo.fixed_dt=$(dt 0.5 $n) \
+        xlo.type=sw xhi.type=sw ylo.type=sw yhi.type=sw >& out.walls_slip.$n
+done
+for n in 64 128 256; do
+    ./incflo2d.gnu.MPI.ex inputs.divu_source_temperature amr.n_cell="$n $((n/8))" incflo.fixed_dt=$(dt 0.5 $n) \
+        incflo.advect_momentum=1 >& out.temperature_momentum.$n
+    ./incflo2d.gnu.MPI.ex inputs.divu_source_temperature amr.n_cell="$n $((n/8))" incflo.fixed_dt=$(dt 0.5 $n) \
+        incflo.use_ppm=0 >& out.temperature_plm.$n
+done
+echo "Norm0 / Norm2 of the errors at the final time"
+for c in ballistic_explicit walls_explicit; do
+    for n in 32 64 128; do
+        echo "probtype 603, $c, n = $n"
+        grep Norm0 out.$c.$n | tail -6
+    done
+done
+for n in 32 64 128; do
+    echo "probtype 604, explicit, n = $n"
+    grep Norm0 out.mms_explicit.$n | tail -3
+done
+for c in ballistic_implicit ballistic_momentum ballistic_plm ballistic_per_component walls_slip; do
+    for n in 32 64 128 256; do
+        echo "probtype 603, $c, n = $n"
+        grep Norm0 out.$c.$n | tail -6
+    done
+done
+for c in temperature_explicit temperature_implicit; do
+    for n in 64 128 256 512; do
+        echo "probtype 606, $c, n = $n"
+        grep Norm0 out.$c.$n | tail -7
+    done
+done
+for c in temperature_momentum temperature_plm; do
+    for n in 64 128 256; do
+        echo "probtype 606, $c, n = $n"
+        grep Norm0 out.$c.$n | tail -7
+    done
+done

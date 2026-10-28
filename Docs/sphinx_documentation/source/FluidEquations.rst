@@ -46,7 +46,9 @@ By default, incflo solves the equivalent convective form,
 ``incflo.advect_momentum = true`` selects the conservative form above.
 With ``incflo.use_tensor_solve = false``, the velocity components are diffused separately, with
 :math:`\nabla \cdot (\eta \nabla U)` in place of :math:`\nabla \cdot \tau` (the two are equal for a
-constant viscosity).
+constant viscosity and :math:`\nabla \cdot U = 0`). With ``incflo.use_divu_source = 1`` (see below),
+:math:`\tau` also has the term :math:`- \frac{2}{3} \eta (\nabla \cdot U) I`, which makes it
+trace-free.
 
 Velocity constraint:
 
@@ -70,6 +72,46 @@ In a closed domain (only walls and periodic boundaries) the
 projections can only enforce :math:`\nabla \cdot U = S - \bar{S}`, where :math:`\bar{S}` is
 the mean of :math:`S`; incflo warns when :math:`\bar{S} \ne 0`. That is a uniform change
 of the thermodynamic pressure, which incflo does not evolve.
+
+Tests with exact solutions validate ``incflo.use_divu_source``: ``incflo.probtype`` = 603 (a
+ballistic potential flow with an evolved density), 604 (a manufactured solution with no-slip walls)
+and 606 (a warm layer carried through a channel, with :math:`S` computed from the temperature), with
+the inputs ``inputs.divu_source_*`` and the scripts ``test_convergence_divu_source*`` in
+``test_no_eb_2d`` and ``test_no_eb_3d``, which describe the results. The regression tests
+``divu_source_plume`` (605, with AMR) and ``divu_source_temperature`` (606, with a restart) are in
+``test_3d``. They cover Godunov advection with PPM or PLM, the convective or conservative form of
+the momentum equation, periodic boundaries, no-slip and slip walls, mass inflow with a pressure
+outflow, one or two levels, an evolved or a constant density, tracers in conservative and
+convective form and the temperature (without diffusion), explicit, Crank-Nicolson and implicit
+viscous terms (the last first order in time) with the tensor or the per-component solve, and an
+:math:`S` that is analytic or computed from the state. MOL and BDS advection, the cell-centered
+projection, embedded boundaries, RZ and direction-dependent boundaries abort; other options and
+combinations are not tested. Known limitations:
+
+- At a pressure outflow the viscous terms take a zero normal derivative of the velocity, which is
+  only consistent with :math:`\nabla \cdot U = S` where :math:`S = 0`, so keep :math:`S` zero there.
+- Where :math:`S \ne 0` on a no-slip wall, the density and the tracers are first order in the
+  cells next to the wall; at slip walls, only the tracers in convective form are.
+- With viscosity, the pressure is first order along coarse/fine boundaries; this also happens with
+  :math:`S = 0`.
+- The terms of the right-hand side of the nodal projection, :math:`\nabla \cdot U^*` and
+  :math:`S`, can be much larger than the right-hand side itself, so at fine resolutions its residual
+  can stop decreasing above the default ``nodal_proj.mg_rtol``; then relax it (the 606 inputs use
+  :math:`10^{-10}`).
+
+Next to walls the velocity and the scalars converge at second order, but with viscosity the
+pressure converges at first order in the cells next to a wall wherever
+:math:`\partial^2 u_n / \partial n^2 \ne 0` there (where the shear varies along a no-slip wall,
+or :math:`\partial S / \partial n \ne 0` at any wall), with or without :math:`S`. The nodal
+projection leaves an :math:`O(h^2)` error in the wall-normal velocity next to a wall, because its
+divergence at wall nodes treats the first row of cells as uniform over the half control volume, and
+the viscous operator, which divides by :math:`h^2` and has its own :math:`O(1)` truncation error at
+the wall, turns that into an :math:`O(1)` wall-normal force, which the pressure absorbs since the
+constraint fixes the normal velocity. Quadratic ghost-cell extrapolation in the viscous solve
+(``tensor_diffusion.mg_maxorder = 3``, or ``scalar_diffusion.mg_maxorder = 3`` with the
+per-component solve, instead of the default 2), which the test problems with walls use, makes that
+truncation error :math:`O(h)` and the pressure error next to the wall a third smaller, but still
+first order.
 
 Tracer(s): for conservative,
 

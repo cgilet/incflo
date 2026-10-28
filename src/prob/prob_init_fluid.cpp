@@ -1289,13 +1289,16 @@ void incflo::init_divu_ballistic (Box const& vbx, Box const& /*gbx*/,
 // cross before the end of the run (with a 10% margin), where the solution stops existing.
 void incflo::check_divu_ballistic (int lev) const
 {
+    // At the walls the velocity and its normal derivative vanish, so they can be no-slip or slip
     bool has_wall = false;
     for (int d = 0; d < AMREX_SPACEDIM; ++d) {
         if (!geom[lev].isPeriodic(d)) {
             has_wall = true;
-            if (m_bc_type[Orientation(d,Orientation::low)] != BC::no_slip_wall ||
-                m_bc_type[Orientation(d,Orientation::high)] != BC::no_slip_wall) {
-                amrex::Abort("incflo.probtype = 603 needs no-slip walls in the non-periodic directions");
+            for (auto const side : {Orientation::low, Orientation::high}) {
+                auto const bct = m_bc_type[Orientation(d,side)];
+                if (bct != BC::no_slip_wall && bct != BC::slip_wall) {
+                    amrex::Abort("incflo.probtype = 603 needs walls in the non-periodic directions");
+                }
             }
         }
     }

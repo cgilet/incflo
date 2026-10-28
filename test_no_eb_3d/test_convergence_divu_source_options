@@ -1,0 +1,27 @@
+#!/bin/bash
+# Convergence of the div(u) = S tests with exact solutions in 3D (see
+# test_convergence_divu_source) with explicit viscous terms (incflo.diffusion_type = 0), with dt
+# from the CFL condition, which then includes the viscous limit dt ~ dx^2.  Run from this
+# directory after building incflo3d.gnu.MPI.ex.  The errors converge as with Crank-Nicolson,
+# within what these resolutions show; see the 2D script for the other options.
+for n in 16 32; do
+    ./incflo3d.gnu.MPI.ex inputs.divu_source_ballistic amr.n_cell="$n $n $n" incflo.diffusion_type=0 >& out.ballistic_explicit.$n
+    ./incflo3d.gnu.MPI.ex inputs.divu_source_mms amr.n_cell="$n $n $n" incflo.diffusion_type=0 >& out.mms_explicit.$n
+done
+for n in 64 128; do
+    ./incflo3d.gnu.MPI.ex inputs.divu_source_temperature amr.n_cell="$n $((n/8)) $((n/8))" incflo.diffusion_type=0 \
+        >& out.temperature_explicit.$n
+done
+echo "Norm0 / Norm2 of the errors at the final time"
+for n in 16 32; do
+    echo "probtype 603, periodic, explicit, n = $n"
+    grep Norm0 out.ballistic_explicit.$n | tail -7
+done
+for n in 16 32; do
+    echo "probtype 604, explicit, n = $n"
+    grep Norm0 out.mms_explicit.$n | tail -4
+done
+for n in 64 128; do
+    echo "probtype 606, explicit, n = $n"
+    grep Norm0 out.temperature_explicit.$n | tail -8
+done

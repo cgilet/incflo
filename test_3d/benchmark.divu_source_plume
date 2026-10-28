@@ -40,6 +40,8 @@ incflo.gravity          =   0.  0.  0.  # Gravitational force (3D)
 incflo.ro_0             =   1.          # Reference density
 incflo.fluid_model      =   "newtonian" # Fluid model (rheology)
 incflo.mu               =   0.01        # Dynamic viscosity coefficient
+tensor_diffusion.mg_maxorder = 3        # Quadratic ghost-cell extrapolation at the walls
+scalar_diffusion.mg_maxorder = 3        #   in the viscous and scalar diffusion solves
 
 incflo.ntrac            =   2           # Number of tracers
 incflo.advect_tracer    =   true        # Should we update them?

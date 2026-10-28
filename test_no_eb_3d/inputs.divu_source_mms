@@ -8,9 +8,11 @@
 # The density is constant, so incflo warns that mass is not conserved (S is a volume
 # source here).  The forcing assumes the tensor viscous stress (incflo.use_tensor_solve).
 #
-# The velocity converges at second order.  The pressure is first order next to the walls,
-# where the error of the wall-normal pressure gradient does not converge.  That comes from
-# the nodal projection at no-slip walls with viscosity, and happens with S = 0 too.
+# The velocity converges at second order.  The pressure is first order in the cells next to
+# the walls, as in any viscous flow whose shear varies along a no-slip wall, with S = 0 too:
+# the nodal projection leaves an O(h^2) error in the wall-normal velocity there, which the
+# viscous operator turns into an O(1) wall-normal force that the pressure absorbs (see the
+# docs).  tensor_diffusion.mg_maxorder = 3 below makes that pressure error a third smaller.
 
 stop_time               =   1.0
 max_step                =   -1
@@ -28,6 +30,10 @@ incflo.constant_density =   1
 incflo.ro_0             =   1.
 incflo.mu               =   0.05
 incflo.diffusion_type   =   1
+# Quadratic ghost-cell extrapolation at the walls in the viscous solves, which makes their
+# truncation error there first order instead of O(1) (see the docs on the pressure at walls)
+tensor_diffusion.mg_maxorder = 3
+scalar_diffusion.mg_maxorder = 3
 incflo.gravity          =   0.  0.  0.
 incflo.advect_tracer    =   0
 
