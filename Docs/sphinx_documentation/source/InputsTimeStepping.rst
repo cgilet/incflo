@@ -45,8 +45,10 @@ Setting the Time Step
 
   * If you want to let the code determine the appropriate time step using the advective CFL
     condition, then set :cpp:`incflo.cfl = 0.7` for example, and (in the absence of forcing
-    terms and of explicit diffusion, which further restrict it) the fluid time step will
-    be computed to be dt = 0.7 * dx / max(vel).
+    terms, of explicit diffusion and of a positive :math:`S` with
+    :cpp:`incflo.use_divu_source = 1`, which further restrict it) the fluid time step will
+    be computed to be dt = 0.7 * dx / max(vel). A positive :math:`S` counts as a rate, like
+    max(vel) / dx, since the density falls by about :math:`S` dt in a step.
 
   * Note that the cfl defaults to 0.5 so it does not have to be set in the inputs file. If neither
     :cpp:`incflo.cfl` nor :cpp:`incflo.fixed_dt` is set, then default value of cfl will be used.

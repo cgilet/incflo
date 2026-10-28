@@ -11,13 +11,15 @@ using namespace amrex;
 // "A Boundary Condition Capturing Method for Multiphase Incompressible Flow"
 // by Kang et al. (JCP).
 //
-//  dt/2 * ( C+V + sqrt( (C+V)**2 + 4Fx/dx + 4Fy/dy + 4Fz/dz )
+//  dt/2 * ( C+V+S + sqrt( (C+V+S)**2 + 4Fx/dx + 4Fy/dy + 4Fz/dz )
 //
 // where
 //
 // C = max(|U|)/dx + max(|V|)/dy + max(|W|)/dz    --> Convection
 //
 // V = 2 * max(eta/rho) * (1/dx^2 + 1/dy^2 +1/dz^2) --> Diffusion
+//
+// S = max(S), with div(U) = S, if positive        --> Expansion
 //
 // Fx, Fy, Fz = net acceleration due to external forces
 //
@@ -34,6 +36,7 @@ void incflo::ComputeDt (int initialization, bool explicit_diffusion, double cur_
     Real conv_cfl = Real(0.0);
     Real diff_cfl = Real(0.0);
     Real forc_cfl = Real(0.0);
+    Real divu_cfl = Real(0.0);
 
     for (int lev = 0; lev <= finest_level; ++lev)
     {
@@ -189,6 +192,12 @@ void incflo::ComputeDt (int initialization, bool explicit_diffusion, double cur_
         forc_cfl = std::max(forc_cfl, forc_lev);
         conv_cfl = std::max(conv_cfl, conv_lev);
 
+        // With div(U) = S, the fluid expands at the rate S, and its density falls by about
+        // S dt in a step, so a positive S limits dt as the convective rate does
+        if (m_use_divu_source) {
+            divu_cfl = std::max(divu_cfl, m_leveldata[lev]->divu_source.max(0, 0, true));
+        }
+
 #if (AMREX_SPACEDIM == 2)
         Real dxinv_norm = dxinv[0]*dxinv[0]+dxinv[1]*dxinv[1];
 #else
@@ -200,13 +209,13 @@ void incflo::ComputeDt (int initialization, bool explicit_diffusion, double cur_
 
     Real cd_cfl;
     if (explicit_diffusion) {
-        ParallelAllReduce::Max<Real>({conv_cfl,diff_cfl},
+        ParallelAllReduce::Max<Real>({conv_cfl,diff_cfl,divu_cfl},
                                      ParallelContext::CommunicatorSub());
-        cd_cfl = conv_cfl + diff_cfl;
+        cd_cfl = conv_cfl + diff_cfl + divu_cfl;
     } else {
-        ParallelAllReduce::Max<Real>(conv_cfl,
+        ParallelAllReduce::Max<Real>({conv_cfl,divu_cfl},
                                      ParallelContext::CommunicatorSub());
-        cd_cfl = conv_cfl;
+        cd_cfl = conv_cfl + divu_cfl;
     }
 
     ParallelAllReduce::Max<Real>(forc_cfl,
