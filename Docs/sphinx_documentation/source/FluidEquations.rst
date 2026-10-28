@@ -68,10 +68,16 @@ uses the :math:`S` defined for the chosen ``incflo.probtype``: an analytic :math
 ``incflo.probtype = 606``, where :math:`S = \kappa (T - T_{ref})` is computed from the temperature.
 It is virtual, so a class derived from ``incflo`` can compute :math:`S` from the state instead,
 as a low Mach number model would.
-In a closed domain (only walls and periodic boundaries) the
-projections can only enforce :math:`\nabla \cdot U = S - \bar{S}`, where :math:`\bar{S}` is
-the mean of :math:`S`; incflo warns when :math:`\bar{S} \ne 0`. That is a uniform change
-of the thermodynamic pressure, which incflo does not evolve.
+With ``incflo.use_divu_source = 1`` the fluid enters the domain through mass inflows and leaves
+it through pressure outflows; pressure inflow, mixed and direction-dependent boundaries abort.
+The volume that :math:`S` makes has to leave through a boundary where the pressure is set, so mass
+inflow needs a pressure outflow, and a closed domain (only walls and periodic boundaries) is not
+supported: it aborts unless ``incflo.allow_closed_with_divu_source = 1``. In a closed domain the
+projections can only enforce :math:`\nabla \cdot U = S - \bar{S}`, where :math:`\bar{S}` is the
+mean of :math:`S`, and incflo removes :math:`\bar{S}` from the :math:`S` that the advection scheme
+uses as well, so that the two agree. A nonzero :math:`\bar{S}` is a uniform change of the
+thermodynamic pressure, which incflo does not evolve, and incflo does not add the compression
+heating that goes with it; only the closed-domain test problems (603 and 604) are validated.
 
 Tests with exact solutions validate ``incflo.use_divu_source``: ``incflo.probtype`` = 603 (a
 ballistic potential flow with an evolved density), 604 (a manufactured solution with no-slip walls)
@@ -85,11 +91,12 @@ outflow, one or two levels, an evolved or a constant density, tracers in conserv
 convective form and the temperature (without diffusion), explicit, Crank-Nicolson and implicit
 viscous terms (the last first order in time) with the tensor or the per-component solve, and an
 :math:`S` that is analytic or computed from the state. MOL and BDS advection, the cell-centered
-projection, embedded boundaries, RZ and direction-dependent boundaries abort; other options and
-combinations are not tested. Known limitations:
+projection, embedded boundaries, RZ, and pressure inflow, mixed and direction-dependent boundaries
+abort; other options and combinations are not tested. Known limitations:
 
 - At a pressure outflow the viscous terms take a zero normal derivative of the velocity, which is
   only consistent with :math:`\nabla \cdot U = S` where :math:`S = 0`, so keep :math:`S` zero there.
+  At a mass inflow :math:`S` is zero in the tests too.
 - Where :math:`S \ne 0` on a no-slip wall, the density and the tracers are first order in the
   cells next to the wall; at slip walls, only the tracers in convective form are.
 - With viscosity, the pressure is first order along coarse/fine boundaries; this also happens with

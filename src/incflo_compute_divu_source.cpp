@@ -91,50 +91,52 @@ incflo::compute_dsdt ()
     }
 }
 
-//
-// In a closed domain (only walls and periodic boundaries) the projections are singular,
-// and MLMG silently removes the mean of the right-hand side, so the velocity satisfies
-// div(u) = S - mean(S).  With a uniform 1/(gamma p0) that is the closed-chamber low Mach
-// number correction, S - dp0/dt / (gamma p0), but incflo neither evolves p0 nor adds the
-// compression heating dp0/dt / (rho cp) to the temperature equation.  Warn once.
-//
-void
-incflo::check_divu_source_solvability ()
+bool
+incflo::closed_domain () const
 {
-    if (!m_use_divu_source) { return; }
-
-    bool closed = true;
     for (OrientationIter oit; oit; ++oit) {
         auto const bct = m_bc_type[oit()];
         if (bct != BC::periodic && bct != BC::slip_wall && bct != BC::no_slip_wall) {
-            closed = false;
+            return false;
         }
     }
-    if (!closed) { return; }
-    if (m_divu_solvability_warned && m_verbose <= 0) { return; }
+    return true;
+}
 
+//
+// A closed domain (only walls and periodic boundaries) needs
+// incflo.allow_closed_with_divu_source = 1.  The projections are then singular, and MLMG removes
+// the mean of their right-hand sides, so they enforce div(u) = S - mean(S).  The Godunov
+// edge-state prediction also reads S^(n+1/2) as div(u_mac): for the quantities advected in
+// convective form, and in 3D, through the corner coupling, for all of them.  So
+// compute_MAC_projected_velocities removes that mean from S^(n+1/2) itself, with the function
+// MLMG uses; otherwise the prediction would be off by mean(S), and those quantities would be
+// only first order in time.  The S^(n+1) of the nodal projection is not used anywhere else, so
+// there MLMG's removal is enough.
+//
+// With a uniform 1/(gamma p0), S - mean(S) is the closed-chamber low Mach number constraint
+// S - dp0/dt / (gamma p0), but incflo neither evolves p0 nor adds the compression heating
+// dp0/dt / (rho cp) to the temperature equation.  The integral of S is a sum over the cells, so
+// it is zero only to truncation error even when the exact integral is zero.
+//
+void
+incflo::print_divu_source_integral () const
+{
+    if (!m_use_divu_source || !closed_domain() || m_verbose <= 0) { return; }
+
+    Vector<MultiFab const*> S(finest_level+1);
     Vector<MultiFab> abs_S(finest_level+1);
     for (int lev = 0; lev <= finest_level; ++lev) {
+        S[lev] = &m_leveldata[lev]->divu_source;
         abs_S[lev].define(grids[lev], dmap[lev], 1, 0, MFInfo(), Factory(lev));
-        MultiFab::Copy(abs_S[lev], m_leveldata[lev]->divu_source, 0, 0, 1, 0);
+        MultiFab::Copy(abs_S[lev], *S[lev], 0, 0, 1, 0);
         abs_S[lev].abs(0, 1);
     }
-    Real const sum_S     = amrex::volumeWeightedSum(GetVecOfConstPtrs(get_divu_source_new()),
-                                                    0, Geom(), refRatio());
+    Real const sum_S     = amrex::volumeWeightedSum(S, 0, Geom(), refRatio());
     Real const sum_abs_S = amrex::volumeWeightedSum(GetVecOfConstPtrs(abs_S), 0, Geom(),
                                                     refRatio());
+    Real const ratio = (sum_abs_S > Real(0.0)) ? std::abs(sum_S) / sum_abs_S : Real(0.0);
 
-    if (m_verbose > 0) {
-        amrex::Print() << "Closed domain: integral of S = " << sum_S << "\n";
-    }
-
-    constexpr Real tol = Real(1.e-8);
-    if (!m_divu_solvability_warned && std::abs(sum_S) > tol * sum_abs_S) {
-        m_divu_solvability_warned = true;
-        amrex::Print() << "WARNING: incflo.use_divu_source: the domain is closed but the "
-                          "integral of S is not zero.  The projections remove the mean of S, "
-                          "which is a uniform change of the thermodynamic pressure; incflo "
-                          "does not evolve that pressure or add the matching compression "
-                          "heating to the temperature equation.\n";
-    }
+    amrex::Print() << "Closed domain: integral of S = " << sum_S << ", " << ratio
+                   << " of the integral of |S|\n";
 }

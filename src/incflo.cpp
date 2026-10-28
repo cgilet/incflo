@@ -38,6 +38,51 @@ incflo::incflo ()
         amrex::Abort("incflo.use_divu_source is not yet implemented with direction_dependent boundaries");
     }
 
+    // With div(u) = S, the fluid enters through mass inflows and leaves through pressure
+    // outflows, which the tests cover.  The volume that S makes must be able to leave (or enter,
+    // where S < 0) through a boundary where the pressure is set.
+    if (m_use_divu_source) {
+        bool has_pressure_outflow = false;
+        bool has_mass_inflow = false;
+        for (OrientationIter oit; oit; ++oit) {
+            auto const bct = m_bc_type[oit()];
+            // No test covers these; S could make the fluid leave through a pressure inflow.
+            // A mixed boundary also needs embedded boundaries, which abort with div(u) = S.
+            if (bct == BC::pressure_inflow || bct == BC::mixed) {
+                amrex::Abort("incflo.use_divu_source is not yet implemented with pressure "
+                             "inflow or mixed boundaries");
+            }
+            if (bct == BC::pressure_outflow) {
+                has_pressure_outflow = true;
+            }
+            if (bct == BC::mass_inflow) {
+                has_mass_inflow = true;
+            }
+        }
+        if (has_mass_inflow && !has_pressure_outflow) {
+            amrex::Abort("incflo.use_divu_source: mass inflow needs a pressure outflow, since "
+                         "the flow through the other boundaries is prescribed and cannot match "
+                         "the integral of S");
+        }
+        // A closed domain is not supported: the projections are singular and enforce
+        // div(u) = S - mean(S) (see print_divu_source_integral)
+        if (closed_domain()) {
+            if (!m_allow_closed_with_divu_source) {
+                amrex::Abort("incflo.use_divu_source is not supported in a closed domain (only "
+                             "walls and periodic boundaries); set "
+                             "incflo.allow_closed_with_divu_source = 1 to run anyway");
+            }
+            amrex::Print() << "WARNING: incflo.use_divu_source in a closed domain, which is not "
+                              "supported (incflo.allow_closed_with_divu_source = 1).  The "
+                              "projections enforce div(u) = S - mean(S), and incflo removes the "
+                              "same mean from the S of the advection scheme, but it neither "
+                              "evolves the thermodynamic pressure nor adds the compression "
+                              "heating that a nonzero mean of S implies.  Only the closed-domain "
+                              "test problems (incflo.probtype = 603 and 604) are validated; "
+                              "anything else may not run or may be wrong.\n";
+        }
+    }
+
     init_advection();
 
     set_background_pressure();

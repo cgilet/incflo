@@ -541,8 +541,8 @@ private:
 
     // Divergence constraint div(u) = S instead of div(u) = 0
     bool m_use_divu_source = false;
-    // Only warn once about a closed domain with a non-zero integral of S
-    bool m_divu_solvability_warned = false;
+    // Allow div(u) = S in a closed domain, which is not supported
+    bool m_allow_closed_with_divu_source = false;
 
     // Density (if constant)
     amrex::Real m_ro_0 = 1.0;
@@ -1034,8 +1034,11 @@ private:
     void compute_divu_source_nph ();
     // dS/dt = (S^(n+1) - S^n) / dt
     void compute_dsdt ();
-    // Warn (once) when a closed domain has a non-zero net S
-    void check_divu_source_solvability ();
+    // With incflo.verbose, print the integral of S in a closed domain
+    void print_divu_source_integral () const;
+    // True if every boundary is periodic or a wall: no fluid crosses the boundary, and the
+    // projections are singular
+    [[nodiscard]] bool closed_domain () const;
 
     void Advance (double cur_time);
     [[nodiscard]] bool writeNow () {

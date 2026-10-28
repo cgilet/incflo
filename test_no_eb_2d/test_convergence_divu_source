@@ -25,6 +25,10 @@
 #     second order or faster.  The density, the tracers and the temperature converge at second
 #     order in L2, and their max errors, at the peak of the warm layer, which the PPM limiter
 #     clips, at order 1.6.
+#   With incflo.divu_source_offset = 1, a constant added to S in a closed domain: the
+#     projections remove it, and so does incflo from the S^(n+1/2) of the advection, so every
+#     norm must be the same as without it, to the solver tolerance.  Run for 603 with no-slip
+#     walls, and periodic with two levels.
 dt() { awk "BEGIN {printf \"%.10g\", $1/$2}"; }
 for n in 32 64 128 256; do
     ./incflo2d.gnu.MPI.ex inputs.divu_source_ballistic amr.n_cell="$n $n" incflo.fixed_dt=$(dt 0.5 $n) >& out.ballistic.$n
@@ -38,6 +42,16 @@ for n in 32 64 128; do
     ./incflo2d.gnu.MPI.ex inputs.divu_source_ballistic amr.n_cell="$n $n" incflo.fixed_dt=$(dt 0.25 $n) \
         amr.max_level=1 amr.n_error_buf=0 amr.regrid_int=-1 incflo.tag_region=true \
         incflo.tag_region_lo="0.25 0.25" incflo.tag_region_hi="0.75 0.75" >& out.ballistic_amr.$n
+done
+for n in 32 64 128; do
+    ./incflo2d.gnu.MPI.ex inputs.divu_source_ballistic_walls amr.n_cell="$n $n" incflo.fixed_dt=$(dt 0.5 $n) \
+        incflo.divu_source_offset=1 >& out.walls_offset.$n
+done
+for n in 32 64; do
+    ./incflo2d.gnu.MPI.ex inputs.divu_source_ballistic amr.n_cell="$n $n" incflo.fixed_dt=$(dt 0.25 $n) \
+        amr.max_level=1 amr.n_error_buf=0 amr.regrid_int=-1 incflo.tag_region=true \
+        incflo.tag_region_lo="0.25 0.25" incflo.tag_region_hi="0.75 0.75" \
+        incflo.divu_source_offset=1 >& out.ballistic_amr_offset.$n
 done
 echo "Norm0 / Norm2 of the errors at the final time"
 for n in 32 64 128 256; do
@@ -60,4 +74,12 @@ done
 for n in 64 128 256 512; do
     echo "probtype 606, n = $n"
     grep Norm0 out.temperature.$n | tail -7
+done
+for n in 32 64 128; do
+    echo "probtype 603, no-slip walls, n = $n, with incflo.divu_source_offset = 1 (as without it)"
+    grep Norm0 out.walls_offset.$n | tail -6
+done
+for n in 32 64; do
+    echo "probtype 603, periodic, two levels, coarse n = $n, with incflo.divu_source_offset = 1"
+    grep Norm0 out.ballistic_amr_offset.$n | tail -12
 done

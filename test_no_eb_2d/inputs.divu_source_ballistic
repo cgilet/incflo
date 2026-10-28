@@ -26,6 +26,9 @@ amr.check_int           =   -1
 amr.plotVariables       =   velx vely gpx gpy p density tracer divu_source error_u error_v error_p error_density error_tracer
 
 incflo.use_divu_source  =   1
+# The domain is closed, which is only allowed for testing: the projections remove the mean of
+# S, which is zero here
+incflo.allow_closed_with_divu_source = 1
 
 incflo.constant_density =   0
 incflo.ro_0             =   1.

@@ -612,7 +612,9 @@ incflo::compute_convective_term (Vector<MultiFab*> const& conv_u,
             // there from the coarse level. The convective form below still uses div(u_mac):
             // it needs no ghost cells, and it must be the discrete divergence of the same u_mac
             // as the fluxes so that a constant stays exactly constant (with S instead, errors of
-            // the order of the MAC projection tolerance would appear).
+            // the order of the MAC projection tolerance would appear).  In a closed domain they
+            // agree because compute_MAC_projected_velocities removes from S^(n+1/2) the mean
+            // that MLMG removes from the right-hand side of the MAC projection.
             Array4<Real const> const& divu_arr = (m_use_divu_source)
                 ? m_leveldata[lev]->divu_source_nph.const_array(mfi)
                 : divu[lev].const_array(mfi);
