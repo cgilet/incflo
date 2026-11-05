@@ -115,3 +115,30 @@ The upstream runner's maintainers manage its deployed configuration and stored
 benchmarks. Update this guide or the starter subset when their documented setup
 needs to change; keep machine-specific paths, recipients, and benchmark data
 outside the repository.
+
+## Nonzero-divergence cases
+
+The example also includes two non-EB 3D cases, each using two MPI ranks:
+
+- `no_eb_3d_divu_source_temperature` uses an evolved temperature source (606),
+  variable density and both tracer formulations. Its fixed 20-step horizon guarantees
+  an interior checkpoint at step 5 for the runner's restart comparison.
+- `no_eb_3d_divu_source_plume` uses a localized pulsing source (607), viscosity,
+  diffusing tracers and AMR regridding. It has no exact solution; a benchmark checks
+  maintenance behavior, not coarse/fine convergence or physical-model completeness.
+
+Plotfiles include velocity, pressure gradient, density, both tracers and raw S;
+the temperature case also includes temperature. S and dS/dt are saved in checkpoints.
+See `validation/README.md` for exact-solution checks and known numerical limitations.
+
+Before accepting benchmarks, run both cases and compare uninterrupted/restarted 606:
+
+```sh
+python3 validation/check_regressions.py --exe /path/to/incflo3d.gnu.MPI.ex \
+    --fcompare /path/to/fcompare.gnu.ex --output /tmp/divu-regression-check
+```
+
+This uses two MPI ranks per simulation and runs cases sequentially. It checks final
+step counts, required plot variables, restart agreement and actual AMR regridding.
+Create and review benchmark files separately with the shared runner instructions above;
+upstream deployment and benchmark enrollment remain maintainer actions.

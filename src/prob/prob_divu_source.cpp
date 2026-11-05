@@ -114,6 +114,43 @@ void incflo::prob_divu_source (int lev, MultiFab& divu_source, MultiFab const* /
             });
         }
     }
+    else if (607 == m_probtype)
+    {
+        // A pulsing, localized source in a channel along x, like the heat release in a
+        // low Mach number flow:
+        //   S = A (1 + sin(2 pi t/T)/2) max(exp(-xr^2)-exp(-25),0) prod_{d>0} sin^2(pi y_d/L_d)
+        // with y_d measured from the low end of the domain, x0 a quarter of the way along the
+        // channel and sigma = L_x/20. Removing the exp(-25) tail and clipping outside
+        // five widths makes S zero at both ends. The sin^2 factors are periodic
+        // and zero on walls.
+        // S >= 0: the fluid expands as it passes.
+        constexpr Real pi = Real(3.1415926535897932);
+        constexpr Real A = Real(2.0);
+        constexpr Real T = Real(0.2);
+        Real const Lx = probhi[0] - problo[0];
+        Real const x0 = problo[0] + Real(0.25) * Lx;
+        Real const sigma = Real(0.05) * Lx;
+        Real const f = A * (Real(1.0) + Real(0.5) * std::sin(Real(2.0) * pi * time / T));
+        for (MFIter mfi(divu_source, TilingIfNotGPU()); mfi.isValid(); ++mfi)
+        {
+            Box const& bx = mfi.tilebox();
+            Array4<Real> const& S = divu_source.array(mfi);
+            ParallelFor(bx, [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept
+            {
+                IntVect const iv(AMREX_D_DECL(i,j,k));
+                Real const xr = (problo[0] + (Real(i) + Real(0.5)) * dx[0] - x0) / sigma;
+                // Subtract the exp(-25) tail and clip outside |xr|=5. The
+                // source is exactly zero at both channel ends, not merely small.
+                Real s = f * amrex::max(std::exp(-xr * xr) - std::exp(Real(-25.0)), Real(0.0));
+                for (int d = 1; d < AMREX_SPACEDIM; ++d) {
+                    Real const y = (Real(iv[d]) + Real(0.5)) * dx[d];
+                    Real const sy = std::sin(pi * y / (probhi[d] - problo[d]));
+                    s *= sy * sy;
+                }
+                S(i,j,k) = s;
+            });
+        }
+    }
     else
     {
         amrex::Abort("prob_divu_source: no S defined for this incflo.probtype");
