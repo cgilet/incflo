@@ -1,0 +1,60 @@
+# div(u) = S with an S computed from the state (incflo.probtype = 606,
+# src/prob/prob_divu_temperature.H): a warm layer carried through a channel along x, with
+#   S = kappa (T - T_ref),  kappa = 2,
+# where T_ref = xlo.temperature is the temperature of the inflow.  There is no conduction
+# (incflo.mu_T = 0), so each particle keeps its temperature and expands at the rate S.  The
+# flow stays 1D, with an exact solution for u, p, the density, the temperature and the
+# tracers, and error_u, error_v, error_w, error_p, error_density, error_tracer and
+# error_temperature hold the differences from it.  Both tracers, in conservative and in
+# convective form, equal T - T_ref.  The layer starts at x = 0.5 with a width of 0.1, and
+# must not reach the outflow before the end of the run (incflo checks this at startup), so
+# S = 0 at both ends.
+
+stop_time               =   0.5
+max_step                =   -1
+
+incflo.cfl              =   0.5
+incflo.init_shrink      =   1.0
+
+amr.plot_int            =   100000
+amr.check_int           =   -1
+amr.plotVariables       =   velx vely velz gpx gpy gpz p density tracer temperature divu_source error_u error_v error_w error_p error_density error_tracer error_temperature
+
+incflo.use_divu_source  =   1
+incflo.use_temperature  =   1
+incflo.mu_T             =   0.
+
+incflo.constant_density =   0
+incflo.ro_0             =   1.
+incflo.mu               =   0.01
+incflo.diffusion_type   =   1
+incflo.gravity          =   0.  0.  0.
+
+incflo.ntrac            =   2
+incflo.advect_tracer    =   1
+incflo.trac_is_conservative = 1  0
+incflo.mu_s             =   0.  0.
+
+amr.n_cell              =   64  8  8
+amr.max_level           =   0
+
+geometry.prob_lo        =   0.  0.  0.
+geometry.prob_hi        =   2.  0.25  0.25
+geometry.is_periodic    =   0   1   1
+
+xlo.type                =   "mi"
+xlo.velocity            =   1.  0.  0.
+xlo.density             =   1.
+xlo.tracer              =   0.  0.
+xlo.temperature         =   1.
+xhi.type                =   "po"
+xhi.pressure            =   0.
+
+incflo.probtype         =   606
+
+# The terms of the right-hand side of the nodal projection, div(u*) and S, are much larger
+# than the right-hand side itself, so at the finest resolutions its residual stops decreasing
+# above the default relative tolerance of 1e-11
+nodal_proj.mg_rtol      =   1.e-10
+
+incflo.verbose          =   1

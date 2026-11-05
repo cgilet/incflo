@@ -54,6 +54,9 @@ Setting the Time Step
     :cpp:`incflo.cfl` is set or not.
 
 With ``incflo.use_divu_source = 1``, the automatic timestep estimate also includes
-``max(0, max(S))`` in the convective/diffusive rate to limit expansion per step.
+``max(0, max(S_effective))`` in the convective/diffusive rate to limit expansion per step.
 This additional restriction does not guarantee positivity. ``incflo.fixed_dt``
 continues to override the automatic estimate.
+
+For closed analytic validation only, S_effective removes the composite old-time mean;
+for open domains S_effective is S. This does not supply missing closed-chamber physics.

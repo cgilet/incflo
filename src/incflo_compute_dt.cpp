@@ -38,6 +38,9 @@ void incflo::ComputeDt (int initialization, bool explicit_diffusion, double cur_
     Real forc_cfl = Real(0.0);
     Real divu_cfl = Real(0.0);
 
+    Real const source_offset = (m_use_divu_source && closed_domain())
+        ? divu_source_mean(GetVecOfConstPtrs(get_divu_source_new())) : Real(0.0);
+
     for (int lev = 0; lev <= finest_level; ++lev)
     {
         auto const dxinv = geom[lev].InvCellSizeArray();
@@ -196,7 +199,17 @@ void incflo::ComputeDt (int initialization, bool explicit_diffusion, double cur_
         // the density falls by about
         // S dt in a step, so a positive S limits dt as the convective rate does
         if (m_use_divu_source) {
-            divu_cfl = std::max(divu_cfl, m_leveldata[lev]->divu_source.max(0, 0, true));
+            MultiFab expansion(grids[lev], dmap[lev], 1, 0);
+            MultiFab::Copy(expansion, m_leveldata[lev]->divu_source, 0, 0, 1, 0);
+            expansion.plus(-source_offset, 0, 1);
+            if (lev < finest_level) {
+                BoxArray covered = grids[lev+1];
+                covered.coarsen(refRatio(lev));
+                for (int ibox = 0; ibox < covered.size(); ++ibox) {
+                    expansion.setVal(Real(0.0), covered[ibox], 0, 1);
+                }
+            }
+            divu_cfl = std::max(divu_cfl, expansion.max(0, 0, true));
         }
 
 #if (AMREX_SPACEDIM == 2)

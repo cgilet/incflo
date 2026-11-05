@@ -462,7 +462,7 @@ void incflo::WritePlotVariables(Vector<std::string> vars, const std::string& plo
 
     for(int n = 0; n < vars.size(); n++) {
         // Check for options with more than one component
-        if ( vars[n] == "tracer" ) { ncomp += m_ntrac; }
+        if ( vars[n] == "tracer" || vars[n] == "error_tracer" ) { ncomp += m_ntrac; }
         else if ( vars[n] == "forcing" ) { ncomp += AMREX_SPACEDIM; }
 
         // Only include these options if relevant/enabled
@@ -607,6 +607,7 @@ void incflo::WritePlotVariables(Vector<std::string> vars, const std::string& plo
                 DiffFromExact(lev, Geom(lev), m_cur_time, m_dt, mf[lev], icomp, icomp_err_u);
                 amrex::Print() << "Norm0 / Norm2 of u error " <<
                     mf[lev].norm0(icomp) << " " << mf[lev].norm2(icomp) / std::sqrt(mf[lev].boxArray().numPts()) << "\n";
+                print_validation_error("u", lev, mf[lev], icomp);
             }
             pltscaVarsName.push_back("error_u");
             ++icomp;
@@ -619,6 +620,7 @@ void incflo::WritePlotVariables(Vector<std::string> vars, const std::string& plo
                 DiffFromExact(lev, Geom(lev), m_cur_time, m_dt, mf[lev], icomp, icomp_err_v);
                 amrex::Print() << "Norm0 / Norm2 of v error " <<
                     mf[lev].norm0(icomp) << " " << mf[lev].norm2(icomp) / std::sqrt(mf[lev].boxArray().numPts()) << "\n";
+                print_validation_error("v", lev, mf[lev], icomp);
             }
             pltscaVarsName.push_back("error_v");
             ++icomp;
@@ -632,11 +634,56 @@ void incflo::WritePlotVariables(Vector<std::string> vars, const std::string& plo
                 DiffFromExact(lev, Geom(lev), m_cur_time, m_dt, mf[lev], icomp, icomp_err_w);
                 amrex::Print() << "Norm0 / Norm2 of w error " <<
                     mf[lev].norm0(icomp) << " " << mf[lev].norm2(icomp) / std::sqrt(mf[lev].boxArray().numPts()) << "\n";
+                print_validation_error("w", lev, mf[lev], icomp);
             }
             pltscaVarsName.push_back("error_w");
             ++icomp;
         }
 #endif
+        else if (vars[n] == "error_density") {
+            int icomp_err_density = AMREX_SPACEDIM+2;
+            for (int lev = 0; lev <= finest_level; ++lev)
+            {
+                MultiFab::Copy(mf[lev], m_leveldata[lev]->density, 0, icomp, 1, 0);
+                DiffFromExact(lev, Geom(lev), m_cur_time, m_dt, mf[lev], icomp, icomp_err_density);
+                amrex::Print() << "Norm0 / Norm2 of density error " <<
+                    mf[lev].norm0(icomp) << " " << mf[lev].norm2(icomp) / std::sqrt(mf[lev].boxArray().numPts()) << "\n";
+                print_validation_error("density", lev, mf[lev], icomp);
+            }
+            pltscaVarsName.push_back("error_density");
+            ++icomp;
+        }
+        else if (vars[n] == "error_tracer") {
+            for (int lev = 0; lev <= finest_level; ++lev)
+            {
+                MultiFab::Copy(mf[lev], m_leveldata[lev]->tracer, 0, icomp, m_ntrac, 0);
+                for (int i = 0; i < m_ntrac; ++i) {
+                    DiffFromExact(lev, Geom(lev), m_cur_time, m_dt, mf[lev], icomp+i, AMREX_SPACEDIM+3+i);
+                    amrex::Print() << "Norm0 / Norm2 of tracer" << i << " error " <<
+                        mf[lev].norm0(icomp+i) << " " << mf[lev].norm2(icomp+i) / std::sqrt(mf[lev].boxArray().numPts()) << "\n";
+                    print_validation_error("tracer"+std::to_string(i), lev, mf[lev], icomp+i);
+                }
+            }
+            for (int i = 0; i < m_ntrac; ++i) {
+                pltscaVarsName.push_back("error_tracer"+std::to_string(i));
+            }
+            icomp += m_ntrac;
+        }
+        else if (vars[n] == "error_temperature") {
+            if (!m_use_temperature) {
+                amrex::Abort("error_temperature needs incflo.use_temperature = 1");
+            }
+            for (int lev = 0; lev <= finest_level; ++lev)
+            {
+                MultiFab::Copy(mf[lev], m_leveldata[lev]->temperature, 0, icomp, 1, 0);
+                DiffFromExact(lev, Geom(lev), m_cur_time, m_dt, mf[lev], icomp, AMREX_SPACEDIM+3+m_ntrac);
+                amrex::Print() << "Norm0 / Norm2 of temperature error " <<
+                    mf[lev].norm0(icomp) << " " << mf[lev].norm2(icomp) / std::sqrt(mf[lev].boxArray().numPts()) << "\n";
+                print_validation_error("temperature", lev, mf[lev], icomp);
+            }
+            pltscaVarsName.push_back("error_temperature");
+            ++icomp;
+        }
         else if (vars[n] == "error_p") {
             int icomp_err_p = AMREX_SPACEDIM;
             for (int lev = 0; lev <= finest_level; ++lev)
@@ -648,9 +695,22 @@ void incflo::WritePlotVariables(Vector<std::string> vars, const std::string& plo
                 }
             }
 
-            Real offset = mf[0].sum(icomp,true);
-            ParallelDescriptor::ReduceRealSum(offset);
-            offset *= Real(1.0)/Real(grids[0].numPts());
+            // The pressure is only determined up to a constant, so its mean is removed, unless
+            // a boundary sets it
+            bool p_set_by_bc = false;
+            for (OrientationIter oit; oit; ++oit) {
+                auto const bct = m_bc_type[oit()];
+                if (bct == BC::pressure_inflow || bct == BC::pressure_outflow ||
+                    bct == BC::direction_dependent || bct == BC::mixed) {
+                    p_set_by_bc = true;
+                }
+            }
+            Real offset = Real(0.0);
+            if (!p_set_by_bc) {
+                offset = mf[0].sum(icomp,true);
+                ParallelDescriptor::ReduceRealSum(offset);
+                offset *= Real(1.0)/Real(grids[0].numPts());
+            }
 
             for (int lev = 0; lev <= finest_level; ++lev)
             {
@@ -658,6 +718,7 @@ void incflo::WritePlotVariables(Vector<std::string> vars, const std::string& plo
                 DiffFromExact(lev, Geom(lev), m_cur_time, m_dt, mf[lev], icomp, icomp_err_p);
                 amrex::Print() << "Norm0 / Norm2 of p error " <<
                     mf[lev].norm0(icomp) << " " << mf[lev].norm2(icomp) / std::sqrt(mf[lev].boxArray().numPts()) << "\n";
+                print_validation_error("p", lev, mf[lev], icomp);
             }
             pltscaVarsName.push_back("error_p");
             ++icomp;
@@ -793,4 +854,17 @@ void incflo::WritePlotVariables(Vector<std::string> vars, const std::string& plo
     // Write the plotfile
     amrex::WriteMultiLevelPlotfile(plotfilename, finest_level + 1, GetVecOfConstPtrs(mf),
                                    pltscaVarsName, Geom(), m_cur_time, istep, refRatio());
+}
+
+void
+incflo::print_validation_error (std::string const& field, int lev,
+                                MultiFab const& error, int comp) const
+{
+    if (m_probtype < 603 || m_probtype > 606) { return; }
+    // Per-level norms, including coarse cells covered by refinement, not composite AMR norms.
+    Real const count = Real(error.boxArray().numPts());
+    amrex::Print() << "DIVU_ERROR time=" << m_cur_time << " level=" << lev
+                   << " field=" << field << " linf=" << error.norm0(comp)
+                   << " l1=" << error.norm1(comp)/count
+                   << " l2=" << error.norm2(comp)/std::sqrt(count) << "\n";
 }

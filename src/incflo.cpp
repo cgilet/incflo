@@ -42,6 +42,10 @@ incflo::incflo ()
     // outflows, which the tests cover.  The volume that S makes must be able to leave (or enter,
     // where S < 0) through a boundary where the pressure is set.
     if (m_use_divu_source) {
+        if (m_probtype == 602) {
+            amrex::Abort("incflo.probtype=602 is unsupported: S is nonzero at pressure outflows; "
+                         "use the warm-channel validation case 606");
+        }
         bool has_pressure_outflow = false;
         bool has_mass_inflow = false;
         for (OrientationIter oit; oit; ++oit) {
@@ -64,15 +68,15 @@ incflo::incflo ()
                          "the flow through the other boundaries is prescribed and cannot match "
                          "the integral of S");
         }
-        bool is_closed = true;
-        for (OrientationIter oit; oit; ++oit) {
-            auto const bct = m_bc_type[oit()];
-            is_closed = is_closed && (bct == BC::periodic || bct == BC::slip_wall ||
-                                      bct == BC::no_slip_wall);
-        }
-        if (is_closed) {
-            amrex::Abort("incflo.use_divu_source: general closed domains are unsupported; "
-                         "thermodynamic pressure evolution and EOS coupling are missing");
+        if (closed_domain()) {
+            if (!m_divu_source_allow_closed || m_probtype < 603 || m_probtype > 605) {
+                amrex::Abort("incflo.use_divu_source: general closed domains are unsupported; "
+                             "only analytic probtypes 603-605 may use "
+                             "incflo.divu_source_allow_closed=1 for validation");
+            }
+            amrex::Print() << "WARNING: closed analytic validation only: projection and advection "
+                              "use S minus its solvability offset. This does not implement EOS "
+                              "coupling, thermodynamic pressure evolution or compression heating.\n";
         }
     }
 

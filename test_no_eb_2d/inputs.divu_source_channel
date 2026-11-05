@@ -1,3 +1,5 @@
+# Legacy 602 case is rejected: its nonzero S at pressure outflows is unsupported.
+# Use inputs.divu_source_temperature (606) instead.
 # div(u) = S with uniform S = 1 (incflo.probtype = 602) in a channel with pressure
 # outflow at both ends.  The exact solution is u = x - 1/2, v = 0, and a density that
 # stays uniform, rho = exp(-t).  error_u and error_v hold the difference from the exact

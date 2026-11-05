@@ -120,9 +120,9 @@ public:
 
     // Fill the valid region of divu_source with S at the given time, computed from the
     // given state, which has at least one filled ghost cell (temperature is empty
-    // unless incflo.use_temperature = 1).  The default uses the analytic S of the
-    // probtype (prob_divu_source).  Virtual so that a derived class can compute S from
-    // the state instead.
+    // unless incflo.use_temperature = 1).  The default uses the S of the probtype
+    // (prob_divu_source), which is analytic except for probtype 606.  Virtual so that a
+    // derived class can compute S from the state instead.
     virtual void compute_divu_source (amrex::Vector<amrex::MultiFab      *> const& divu_source,
                                       amrex::Vector<amrex::MultiFab const*> const& density,
                                       amrex::Vector<amrex::MultiFab const*> const& tracer,
@@ -291,7 +291,9 @@ public:
     ///////////////////////////////////////////////////////////////////////////
 
     void prob_init_fluid (int lev);
-    void prob_divu_source (int lev, amrex::MultiFab& divu_source, amrex::Real time) const;
+    void prob_divu_source (int lev, amrex::MultiFab& divu_source,
+                           amrex::MultiFab const* density, amrex::MultiFab const* tracer,
+                           amrex::MultiFab const* temperature, amrex::Real time) const;
     void prob_set_BC_MF (amrex::Orientation const& ori, amrex::Box const& bx,
                          amrex::Array4<int> const& mask, int lev,
                          int inflow_val, int outflow_val, std::string const& field);
@@ -539,8 +541,8 @@ private:
 
     // Divergence constraint div(u) = S instead of div(u) = 0
     bool m_use_divu_source = false;
-    // Only warn once about a closed domain with a non-zero integral of S
-    bool m_divu_solvability_warned = false;
+    // Explicit exception for built-in closed analytic validation cases 603-605 only
+    bool m_divu_source_allow_closed = false;
 
     // Density (if constant)
     amrex::Real m_ro_0 = 1.0;
@@ -1032,8 +1034,15 @@ private:
     void compute_divu_source_nph ();
     // dS/dt = (S^(n+1) - S^n) / dt
     void compute_dsdt ();
-    // Warn (once) when a closed domain has a non-zero net S
-    void check_divu_source_solvability ();
+    // With incflo.verbose, print the integral of S in a closed domain
+    void print_divu_source_integral () const;
+    // True if every boundary is periodic or a wall: no fluid crosses the boundary, and the
+    // projections are singular
+    [[nodiscard]] bool closed_domain () const;
+    [[nodiscard]] amrex::Real divu_source_mean (
+        amrex::Vector<amrex::MultiFab const*> const& source) const;
+    void print_validation_error (std::string const& field, int lev,
+                                 amrex::MultiFab const& error, int comp) const;
 
     void Advance (double cur_time);
     [[nodiscard]] bool writeNow () {

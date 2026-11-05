@@ -1,3 +1,5 @@
+# Legacy 600/601 case: general closed domains now fail at startup.
+# Use inputs.divu_source_ballistic (603) for closed analytic validation.
 # div(u) = S in a periodic box, with S = f(t) cos(2 pi x) cos(2 pi y)
 #   incflo.probtype = 600: f = 1, a steady potential flow set by the initial projection
 #   incflo.probtype = 601: f = sin(2 pi t), so u = sin(2 pi t) grad(phi0)

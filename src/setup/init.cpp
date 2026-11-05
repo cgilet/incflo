@@ -217,6 +217,7 @@ void incflo::ReadParameters ()
         // Divergence constraint div(u) = S
         pp.query("use_divu_source", m_use_divu_source);
         if (m_use_divu_source) {
+            pp.query("divu_source_allow_closed", m_divu_source_allow_closed);
             if (m_advection_type != "Godunov") {
                 amrex::Abort("incflo.use_divu_source is only implemented for incflo.advection_type = Godunov");
             }

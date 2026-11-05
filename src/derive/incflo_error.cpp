@@ -2,6 +2,9 @@
 
 #include <incflo.H>
 #include <incflo_derive_K.H>
+#include <prob_divu_ballistic.H>
+#include <prob_divu_mms.H>
+#include <prob_divu_temperature.H>
 
 using namespace amrex;
 
@@ -10,6 +13,20 @@ void incflo::DiffFromExact (int /*lev*/, Geometry& lev_geom, Real time, Real dt,
 {
     auto const& dx = lev_geom.CellSizeArray();
     auto const& problo = lev_geom.ProbLoArray();
+
+    // err_comp: 0 to AMREX_SPACEDIM-1 velocity, AMREX_SPACEDIM pressure, AMREX_SPACEDIM+1
+    // MAC pressure, AMREX_SPACEDIM+2 density, AMREX_SPACEDIM+3+n tracer n and
+    // AMREX_SPACEDIM+3+ntrac temperature
+    if (err_comp >= AMREX_SPACEDIM+2 && m_probtype != 603 && m_probtype != 604 &&
+        m_probtype != 606) {
+        amrex::Abort("error_density, error_tracer and error_temperature are only implemented for "
+                     "incflo.probtype = 603, 604 and 606");
+    }
+    bool const is_temperature = (err_comp == AMREX_SPACEDIM+3+m_ntrac);
+    int const itrac = is_temperature ? -1 : err_comp - (AMREX_SPACEDIM+3);
+    if (itrac >= m_ntrac) {
+        amrex::Abort("error_tracer: no such tracer");
+    }
 
     // Taylor-Green vortices
     if (1 == m_probtype)
@@ -138,9 +155,7 @@ void incflo::DiffFromExact (int /*lev*/, Geometry& lev_geom, Real time, Real dt,
                 err(i,j,k,soln_comp) -= exact;
             });
         }
-    // div(u) = S with S = f(t) prod_d cos(2 pi x_d / L_d) in a periodic box: the
-    // potential flow u = f(t) grad(phi0), lap(phi0) = prod_d cos(2 pi x_d / L_d).
-    // Only the velocity is checked.
+    // Legacy periodic potential-flow diagnostics (600 and 601).
     } else if (600 == m_probtype || 601 == m_probtype) {
         constexpr Real twopi = Real(2.0) * Real(3.1415926535897932);
         Real const f = (600 == m_probtype) ? Real(1.0) : std::sin(twopi * time);
@@ -190,6 +205,133 @@ void incflo::DiffFromExact (int /*lev*/, Geometry& lev_geom, Real time, Real dt,
                 Real exact = Real(0.0);
                 if (err_comp == 0) {
                     exact = problo[0] + Real(i+0.5)*dx[0] - xc;
+                }
+                err(i,j,k,soln_comp) -= exact;
+            });
+        }
+    // Ballistic flow: exact pressure is evaluated at its half-step time.
+    } else if (603 == m_probtype || 604 == m_probtype) {
+        if (err_comp == AMREX_SPACEDIM+1) {
+            amrex::Abort("No exact MAC pressure implemented for incflo.probtype = 603 and 604");
+        }
+        if (err_comp == AMREX_SPACEDIM+2 && m_constant_density) {
+            amrex::Abort("error_density for incflo.probtype = 603 and 604 needs "
+                         "incflo.constant_density = 0");
+        }
+        if (is_temperature) {
+            amrex::Abort("No exact temperature implemented for incflo.probtype = 603 and 604");
+        }
+        auto const& probhi = lev_geom.ProbHiArray();
+        GpuArray<Real,AMREX_SPACEDIM> const U{AMREX_D_DECL(m_ic_u, m_ic_v, m_ic_w)};
+        GpuArray<int,AMREX_SPACEDIM> wall;
+        for (int d = 0; d < AMREX_SPACEDIM; ++d) { wall[d] = lev_geom.isPeriodic(d) ? 0 : 1; }
+        // p = (4/3) mu S with the tensor viscous solve, mu S with the per-component one
+        Real const pfac = (use_tensor_solve ? Real(4.0)/Real(3.0) : Real(1.0)) * m_mu;
+        Real const ro_0 = m_ro_0;
+        // With a constant density, a tracer in conservative form is diluted by the expansion
+        bool const dilute = m_constant_density && itrac >= 0 && m_iconserv_tracer[itrac];
+        for(MFIter mfi(error, TilingIfNotGPU()); mfi.isValid(); ++mfi)
+        {
+            Box bx = mfi.tilebox();
+
+            // When we enter this routine, this holds the computed solution
+            Array4<Real> const& err = error.array(mfi);
+
+            ParallelFor(bx, [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept
+            {
+                IntVect const iv(AMREX_D_DECL(i,j,k));
+                GpuArray<Real,AMREX_SPACEDIM> x;
+                for (int d = 0; d < AMREX_SPACEDIM; ++d) {
+                    x[d] = problo[d] + (Real(iv[d]) + Real(0.5)) * dx[d];
+                }
+                Real const t_exact = (err_comp == AMREX_SPACEDIM) ? time - Real(0.5)*dt : time;
+                IncfloDivuBallistic r;
+                incflo_divu_ballistic(x, t_exact, U, problo, probhi, wall, r);
+                Real exact;
+                if (err_comp < AMREX_SPACEDIM) {
+                    exact = r.vel[err_comp];
+                } else if (err_comp == AMREX_SPACEDIM) {
+                    exact = pfac * r.S;
+                } else if (err_comp == AMREX_SPACEDIM+2) {
+                    exact = ro_0 * r.rho0 / r.detF;
+                } else {
+                    exact = dilute ? r.s0 / r.detF : r.s0;
+                }
+                err(i,j,k,soln_comp) -= exact;
+            });
+        }
+
+    // Steady manufactured solution with div(u) = S (prob_divu_mms.H): velocity and
+    // pressure.  The exact pressure has zero mean, as error_p assumes.
+    } else if (605 == m_probtype) {
+        if (err_comp == AMREX_SPACEDIM+1) {
+            amrex::Abort("No exact MAC pressure implemented for incflo.probtype = 605");
+        }
+        auto const& probhi = lev_geom.ProbHiArray();
+        Real const mu = m_mu;
+        Real const ro_0 = m_ro_0;
+        for(MFIter mfi(error, TilingIfNotGPU()); mfi.isValid(); ++mfi)
+        {
+            Box bx = mfi.tilebox();
+
+            // When we enter this routine, this holds the computed solution
+            Array4<Real> const& err = error.array(mfi);
+
+            ParallelFor(bx, [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept
+            {
+                IntVect const iv(AMREX_D_DECL(i,j,k));
+                GpuArray<Real,AMREX_SPACEDIM> x;
+                for (int d = 0; d < AMREX_SPACEDIM; ++d) {
+                    x[d] = problo[d] + (Real(iv[d]) + Real(0.5)) * dx[d];
+                }
+                IncfloDivuMMS r;
+                incflo_divu_mms(x, problo, probhi, mu, ro_0, r);
+                err(i,j,k,soln_comp) -= (err_comp < AMREX_SPACEDIM) ? r.vel[err_comp] : r.p;
+            });
+        }
+    // Warm layer carried through a channel, with S = kappa (T - T_ref)
+    // (prob_divu_temperature.H): velocity, pressure, density, tracers and temperature.  The
+    // pressure is 0 at the outflow, and is taken at t - dt/2, since incflo's pressure is
+    // p^(n+1/2).
+    } else if (606 == m_probtype) {
+        if (err_comp == AMREX_SPACEDIM+1) {
+            amrex::Abort("No exact MAC pressure implemented for incflo.probtype = 606");
+        }
+        Orientation const xlo(0, Orientation::low);
+        Real const U = m_bc_velocity[xlo][0];
+        Real const rho0 = m_bc_density[xlo];
+        Real const T_ref = m_bc_temperature[xlo];
+        Real const xhi = lev_geom.ProbHi(0);
+        // p = (4/3) mu S with the tensor viscous solve, mu S with the per-component one
+        Real const pfac = (use_tensor_solve ? Real(4.0)/Real(3.0) : Real(1.0)) * m_mu;
+        Real const t_exact = (err_comp == AMREX_SPACEDIM) ? time - Real(0.5)*dt : time;
+        auto const q = incflo_divu_temperature_parm(problo[0], xhi);
+        auto const tot = incflo_divu_temperature_int(q.amax, t_exact, q);
+        for(MFIter mfi(error, TilingIfNotGPU()); mfi.isValid(); ++mfi)
+        {
+            Box bx = mfi.tilebox();
+
+            // When we enter this routine, this holds the computed solution
+            Array4<Real> const& err = error.array(mfi);
+
+            ParallelFor(bx, [=] AMREX_GPU_DEVICE (int i, int j, int k) noexcept
+            {
+                Real const x = problo[0] + (Real(i) + Real(0.5)) * dx[0];
+                IncfloDivuTemperature r;
+                incflo_divu_temperature(x, t_exact, U, rho0, pfac, xhi, q, tot, r);
+                Real exact;
+                if (err_comp == 0) {
+                    exact = r.u;
+                } else if (err_comp < AMREX_SPACEDIM) {
+                    exact = Real(0.0);
+                } else if (err_comp == AMREX_SPACEDIM) {
+                    exact = r.p;
+                } else if (err_comp == AMREX_SPACEDIM+2) {
+                    exact = r.rho;
+                } else if (is_temperature) {
+                    exact = T_ref + r.theta;
+                } else {
+                    exact = r.theta / q.dT;
                 }
                 err(i,j,k,soln_comp) -= exact;
             });

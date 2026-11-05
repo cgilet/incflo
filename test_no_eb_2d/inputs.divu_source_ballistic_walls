@@ -1,0 +1,64 @@
+# div(u) = S: ballistic potential flow (incflo.probtype = 603, src/prob/prob_divu_ballistic.H)
+# in a box with no-slip walls.  As inputs.divu_source_ballistic, but the potential has a
+# factor sin^2 in each non-periodic direction, so the velocity vanishes on the walls and the
+# walls do not move; U must be zero.  S is not zero on the walls, so the normal velocity grows
+# linearly from them, but the normal derivatives of S, of the density and of the tracers vanish
+# there.  The boundary conditions of the density and the tracers at the walls assume that (see
+# the docs and incflo::init_bcs); with nonzero normal derivatives, the density and the tracers
+# would be first order next to the walls.
+#
+# The velocity and the pressure converge at second order, also next to the walls (dS/dn = 0
+# there, so d2u_n/dn2 = 0 too; see the docs on the pressure at walls).  Next to the walls the
+# errors of the density and the tracers are much smaller than the largest ones inside, and the
+# walls do not limit their convergence.  They converge at second order in L1.  In L2 the
+# density and the conservative tracer converge at order 1.8 to 1.9 from n = 128 to 256 (1.9 to
+# 2.0 to 512), and their max errors more slowly, at a peak of the density in the middle of the
+# domain that the PPM limiter clips.  The L2 error of the convective tracer converges at order
+# 1.7 and its max error at first order, set in the middle of the domain, on a steep part of its
+# profile where the flow is slow; with PLM (incflo.use_ppm = 0) these orders are 1.9 and 1.3.
+
+stop_time               =   0.5
+max_step                =   -1
+
+incflo.cfl              =   0.5
+incflo.init_shrink      =   1.0
+
+amr.plot_int            =   100000
+amr.check_int           =   -1
+amr.plotVariables       =   velx vely gpx gpy p density tracer divu_source error_u error_v error_p error_density error_tracer
+
+incflo.use_divu_source  =   1
+# The domain is closed, which is only allowed for testing: the projections remove the mean of
+# S, which is zero here
+incflo.divu_source_allow_closed = 1
+
+incflo.constant_density =   0
+incflo.ro_0             =   1.
+incflo.mu               =   0.05
+incflo.diffusion_type   =   1
+# Quadratic ghost-cell extrapolation at the walls in the viscous solves, which makes their
+# truncation error there first order instead of O(1) (see the docs on the pressure at walls)
+tensor_diffusion.mg_maxorder = 3
+scalar_diffusion.mg_maxorder = 3
+incflo.gravity          =   0.  0.
+
+incflo.ntrac            =   2
+incflo.advect_tracer    =   1
+incflo.trac_is_conservative = 1  0
+incflo.mu_s             =   0.  0.
+
+amr.n_cell              =   32  32
+amr.max_level           =   0
+
+geometry.prob_lo        =   0.  0.
+geometry.prob_hi        =   1.  1.
+geometry.is_periodic    =   0   0
+
+xlo.type                =   "nsw"
+xhi.type                =   "nsw"
+ylo.type                =   "nsw"
+yhi.type                =   "nsw"
+
+incflo.probtype         =   603
+
+incflo.verbose          =   1

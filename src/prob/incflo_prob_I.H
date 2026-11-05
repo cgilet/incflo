@@ -164,4 +164,37 @@
                     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const& dx,
                     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const& problo,
                     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const& probhi) const;
+
+    void init_divu_ballistic (amrex::Box const& vbx, amrex::Box const& gbx,
+                              amrex::Array4<amrex::Real> const& vel,
+                              amrex::Array4<amrex::Real> const& density,
+                              amrex::Array4<amrex::Real> const& tracer,
+                              amrex::Box const& domain,
+                              amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const& dx,
+                              amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const& problo,
+                              amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const& probhi) const;
+
+    void check_divu_ballistic (int lev) const;
+
+    void init_divu_mms (amrex::Box const& vbx, amrex::Box const& gbx,
+                        amrex::Array4<amrex::Real> const& vel,
+                        amrex::Array4<amrex::Real> const& density,
+                        amrex::Array4<amrex::Real> const& tracer,
+                        amrex::Box const& domain,
+                        amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const& dx,
+                        amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const& problo,
+                        amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const& probhi) const;
+
+    void init_divu_temperature (amrex::Box const& vbx, amrex::Box const& gbx,
+                                amrex::Array4<amrex::Real> const& vel,
+                                amrex::Array4<amrex::Real> const& density,
+                                amrex::Array4<amrex::Real> const& tracer,
+                                amrex::Array4<amrex::Real> const& temperature,
+                                amrex::Box const& domain,
+                                amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const& dx,
+                                amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const& problo,
+                                amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> const& probhi) const;
+
+    void check_divu_temperature (int lev) const;
+
 #endif

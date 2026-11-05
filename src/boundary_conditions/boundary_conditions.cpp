@@ -140,6 +140,22 @@ void incflo::init_bcs ()
             AMREX_D_TERM(m_bcrec_velocity[0].set(ori, BCType::ext_dir);,
                          m_bcrec_velocity[1].set(ori, BCType::ext_dir);,
                          m_bcrec_velocity[2].set(ori, BCType::ext_dir););
+            // The density has no value on a no-slip wall, and the tracers and the temperature
+            // have one only if it is given above. Otherwise their ghost cells copy the cell next
+            // to the wall (those of the temperature mirror it), which keeps them bounded and
+            // assumes a zero normal derivative on the wall. That is right for a tracer or a
+            // temperature that diffuses, which then has no flux through the wall. For the
+            // density, and for a tracer or a temperature that does not diffuse, it is not right,
+            // but it is harmless where div(u) = S is zero on the wall: the normal velocity then
+            // grows quadratically from the wall, so the error of the copy reaches the fluxes only
+            // at second order. Where S != 0 on the wall they are first order next to it, unless
+            // their normal derivative there is zero, and so are the conservative tracers with a
+            // wall value, unless that of the density is zero, since they are advected as the
+            // density times the tracer. To be right they would need their value on the wall: the
+            // fluid on a wall that does not move stays there, so a tracer keeps its initial
+            // value, and the density changes as d(rho)/dt = -rho S. (With PPM, AMReX-Hydro also
+            // takes the cell average as the state at the wall face in the convective form, which
+            // is first order in the same cases, at slip walls too.)
             m_bcrec_density[0].set(ori, BCType::foextrap);
             if ( pp.contains("tracer") ) {
                 for (auto& b : m_bcrec_tracer) { b.set(ori, BCType::ext_dir); }
@@ -173,6 +189,11 @@ void incflo::init_bcs ()
                          m_bcrec_velocity[2].set(ori, BCType::hoextrap););
             // Only normal oriection has ext_dir
             m_bcrec_velocity[ori.coordDir()].set(ori, BCType::ext_dir);
+            // The ghost cells of the density and of the tracers without a wall value are
+            // extrapolated to second order (hoextrap), which is right whatever their normal
+            // derivative on the wall. The extrapolated value can lie outside the range of the
+            // data, though, and next to a sharp change at the wall the scalars then overshoot,
+            // with or without div(u) = S (see the docs).
             if (m_advection_type == "BDS") {
                 // BDS requires foextrap to avoid introduction of local max/min
                 m_bcrec_density[0].set(ori, BCType::foextrap);

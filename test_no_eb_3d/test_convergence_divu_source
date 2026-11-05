@@ -1,0 +1,5 @@
+#!/bin/bash
+set -euo pipefail
+here=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+# Pass --exe, --output, --full or --amr explicitly; see validation/README.md.
+exec python3 "$here/../validation/run.py" --dim 3 "$@"
