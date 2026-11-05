@@ -64,10 +64,10 @@ Mach number model, and incflo warns about it, but it has exact solutions that ar
 for testing. :math:`S` comes from ``incflo::compute_divu_source``, which by default
 uses an analytic :math:`S` defined for the chosen ``incflo.probtype``. It is virtual,
 so a class derived from ``incflo`` can compute :math:`S` from the state instead.
-In a closed domain (only walls and periodic boundaries) the
-projections can only enforce :math:`\nabla \cdot U = S - \bar{S}`, where :math:`\bar{S}` is
-the mean of :math:`S`; incflo warns when :math:`\bar{S} \ne 0`. That is a uniform change
-of the thermodynamic pressure, which incflo does not evolve.
+General closed domains (only walls and periodic boundaries) are rejected: a projection
+can remove the mean of S, but that does not provide the missing EOS coupling,
+thermodynamic pressure evolution, or compression heating.
+
 
 Tracer(s): for conservative,
 
@@ -106,3 +106,29 @@ background pressure :math:`p_0` has a constant gradient, and solves for :math:`p
 Only one direction can have a ``delp`` or a pressure inflow/outflow pair, and gravity cannot be in
 that direction. The pressure written to plotfiles (``p``) is :math:`p'`, while the pressure gradient
 (``gpx``, ``gpy`` and ``gpz``) includes :math:`\nabla p_0`.
+
+Divergence-source support
+-------------------------
+
+Nonzero divergence requires Godunov advection, the nodal projection, Cartesian
+coordinates, and no cut-cell embedded boundary geometry. BDS, MOL, the cell-centered
+projection, RZ, and refinement components other than 2 or 4 are rejected.
+Mass inflows require a pressure outflow. Pressure inflow, mixed and direction-dependent
+boundaries are unsupported. Keep S zero at pressure outflows: the viscous outflow
+condition assumes zero normal velocity derivative and is not a general expanding-flow
+boundary condition. Application source functions must satisfy this condition.
+
+Constant density with nonzero divergence adds mass at rate rho_0 S; it is a mathematical
+testing option, not a mass-conserving low-Mach model. Other combinations, including
+non-Newtonian rheology with nonzero divergence, do not acquire validation merely because
+they pass startup checks.
+
+Automatic timestep prediction includes the positive source maximum as an additional
+expansion rate. This is a conservative restriction, not a positivity guarantee; a fixed
+timestep overrides automatic estimation.
+
+Known coarse/fine projection and viscous-interface accuracy issues are deferred; see
+``validation/COARSE_FINE.md`` in the source tree. AMR regression agreement does not prove
+uniformly second-order interface pressure or pressure-gradient accuracy. The physical-wall
+pressure-gradient issue is separate and has a pending AMReX correction, requiring matching
+AMReX-Hydro support; it must not be declared fixed by these incflo changes alone.

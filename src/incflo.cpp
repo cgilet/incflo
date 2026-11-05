@@ -38,6 +38,44 @@ incflo::incflo ()
         amrex::Abort("incflo.use_divu_source is not yet implemented with direction_dependent boundaries");
     }
 
+    // With div(u) = S, the fluid enters through mass inflows and leaves through pressure
+    // outflows, which the tests cover.  The volume that S makes must be able to leave (or enter,
+    // where S < 0) through a boundary where the pressure is set.
+    if (m_use_divu_source) {
+        bool has_pressure_outflow = false;
+        bool has_mass_inflow = false;
+        for (OrientationIter oit; oit; ++oit) {
+            auto const bct = m_bc_type[oit()];
+            // No test covers these; S could make the fluid leave through a pressure inflow.
+            // A mixed boundary also needs embedded boundaries, which abort with div(u) = S.
+            if (bct == BC::pressure_inflow || bct == BC::mixed) {
+                amrex::Abort("incflo.use_divu_source is not yet implemented with pressure "
+                             "inflow or mixed boundaries");
+            }
+            if (bct == BC::pressure_outflow) {
+                has_pressure_outflow = true;
+            }
+            if (bct == BC::mass_inflow) {
+                has_mass_inflow = true;
+            }
+        }
+        if (has_mass_inflow && !has_pressure_outflow) {
+            amrex::Abort("incflo.use_divu_source: mass inflow needs a pressure outflow, since "
+                         "the flow through the other boundaries is prescribed and cannot match "
+                         "the integral of S");
+        }
+        bool is_closed = true;
+        for (OrientationIter oit; oit; ++oit) {
+            auto const bct = m_bc_type[oit()];
+            is_closed = is_closed && (bct == BC::periodic || bct == BC::slip_wall ||
+                                      bct == BC::no_slip_wall);
+        }
+        if (is_closed) {
+            amrex::Abort("incflo.use_divu_source: general closed domains are unsupported; "
+                         "thermodynamic pressure evolution and EOS coupling are missing");
+        }
+    }
+
     init_advection();
 
     set_background_pressure();

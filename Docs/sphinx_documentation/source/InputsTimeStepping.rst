@@ -52,3 +52,8 @@ Setting the Time Step
     :cpp:`incflo.cfl` nor :cpp:`incflo.fixed_dt` is set, then default value of cfl will be used.
     If :cpp:`incflo.fixed_dt` is set, then it will override the cfl option whether
     :cpp:`incflo.cfl` is set or not.
+
+With ``incflo.use_divu_source = 1``, the automatic timestep estimate also includes
+``max(0, max(S))`` in the convective/diffusive rate to limit expansion per step.
+This additional restriction does not guarantee positivity. ``incflo.fixed_dt``
+continues to override the automatic estimate.
